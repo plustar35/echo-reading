@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""读一本电子书的结构,打印给 LLM 看 —— 不做任何切分。
+"""读一本电子书的结构并打印 —— 不做任何切分。
 
 用法:
-    python inspect.py <book.epub|book.mobi>
+    python inspect_book.py <book.epub|book.mobi>
 
 输出:格式、元数据书名、spine 文档数、TOC、正文取样、章节标记候选。
-看完这份报告后,你(LLM)再判断这本书该怎么切,然后写一次性脚本。
 """
 import os
 import re
@@ -14,7 +13,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ebook_lib import load, plain
 
-# 常见章节标记候选 —— 只是给判断当线索,不是切分规则
+# 常见章节标记候选
 MARKERS = {
     "第N章 (第一章 / 第55章)": r"^第\S{1,8}章",
     "第N回":                  r"^第\S{1,8}回",
@@ -28,7 +27,7 @@ MARKERS = {
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit("用法: python inspect.py <book.epub|book.mobi>")
+        sys.exit("用法: python inspect_book.py <book.epub|book.mobi>")
     path = sys.argv[1]
     title, docs, toc = load(path)
 

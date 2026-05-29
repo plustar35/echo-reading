@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""把切好的章节写成 books/<书名>/chNN.md 骨架 + progress.md。
+"""把切好的章节写成 books/<书名>/chNN/raw.md（纯原文）+ progress.md。
 
-这是 book-ingest 里**另一半确定性脏活**:9 段结构、文件名补零、进度表
-格式都是不变量,固化在这里。一次性切分脚本只要把章节整理成 JSON 喂进来。
+**只输出纯原文**(H1 标题 + 正文)。
 
 输入(stdin 或 --in 文件)是一个 JSON 数组:
     [
       {"title": "第一章", "body": "道可道，非常道……"},
       {"title": "第二章", "body": "天下皆知美之为美……"}
     ]
-title 是这一章的人类可读标题(进度表和 H1 用);body 是纯原文(进第 1 段)。
+title 是这一章的人类可读标题(进度表和 H1 用);body 是纯原文。
 
 用法:
     cat chapters.json | python write_chapters.py --book 道德经 --root /path/to/echo-reading --base "通行本(王弼本)"
     python write_chapters.py --book 道德经 --root . --in chapters.json [--force]
 
-默认**不覆盖**已存在的 chNN.md(保护已读章节的第 8/9 段)。要重灌加 --force。
+默认**不覆盖**已存在的 chNN/raw.md(保护已读/已切分的章节)。要重灌加 --force。
 """
 import argparse
 import json
@@ -23,43 +22,10 @@ import os
 import shutil
 import sys
 
+# 只吐纯原文(H1 标题 + 正文)
 CHAPTER_TEMPLATE = """# {heading}
 
-## 一、原文
-
 {body}
-
-## 二、字词注
-
-<!-- 待生成:关键字逐个解 -->
-
-## 三、白话直译
-
-<!-- 待生成:尽量贴字面 -->
-
-## 四、注家对照
-
-<!-- 待生成:至少三家观点对比 -->
-
-## 五、与前章的连接
-
-<!-- 待生成 -->
-
-## 六、三个值得停下来想一想的问题
-
-<!-- 待生成 -->
-
-## 七、与生活的关联
-
-<!-- 待生成:把抽象拉回经验 -->
-
-## 八、你的理解 / 疑问
-
-<!-- 留白给你 -->
-
-## 九、回看批注
-
-<!-- 留白,读完后续章节后回头补 -->
 """
 
 
@@ -72,7 +38,7 @@ def main():
     ap.add_argument("--save-source", dest="save_source", default="",
                     help="把这个源文件(epub/mobi,或下载到临时目录的文件)拷进 books/<书名>/ 留档")
     ap.add_argument("--in", dest="infile", default="", help="章节 JSON 文件;省略则读 stdin")
-    ap.add_argument("--force", action="store_true", help="覆盖已存在的 chNN.md")
+    ap.add_argument("--force", action="store_true", help="覆盖已存在的 chNN/raw.md")
     args = ap.parse_args()
 
     raw = open(args.infile, encoding="utf-8").read() if args.infile else sys.stdin.read()
@@ -111,7 +77,9 @@ def main():
         body = (ch.get("body") or "").strip() or "<原文提取为空,请检查切分脚本>"
         # H1:title 已自带书名(含《》)时直接用,否则补「《书名》」前缀,避免书名翻倍
         heading = title if "《" in title else f"《{args.book}》{title}"
-        fn = os.path.join(bookdir, f"{cid}.md")
+        chdir = os.path.join(bookdir, cid)
+        os.makedirs(chdir, exist_ok=True)
+        fn = os.path.join(chdir, "raw.md")
         if os.path.exists(fn) and not args.force:
             skipped += 1
         else:

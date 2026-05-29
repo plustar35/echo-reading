@@ -1,3 +1,10 @@
 .DS_Store
 .obsidian/
 *.db
+
+# insight 五个维度文件夹下的 markdown 产出不入库（保留文件夹骨架 .gitkeep）
+insight/概念/*.md
+insight/你的故事/*.md
+insight/闪回/*.md
+insight/共振/*.md
+insight/悬题/*.md
