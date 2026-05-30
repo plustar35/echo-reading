@@ -43,12 +43,12 @@ def unit_skeleton(book, chapter_title, n, total, title, body, is_first):
     if total == 1:
         conn = "## 五、与前章的连接"
         head = title if "《" in title else f"《{book}》{chapter_title}"
-        src = f"> 来自 [[{book}:CHID]] · 整章一个阅读单元"
+        src = f"> 来自 [[{book}/CHID/raw|《{book}》{chapter_title}]] · 整章一个阅读单元"
     else:
         conn = ("## 五、与前章的连接（本单元为本章卷首）" if is_first
                 else "## 五、与上一单元的连接")
         head = f"《{book}》{chapter_title} · 单元{n}：{title}"
-        src = f"> 来自 [[{book}:CHID]] · 阅读单元 {n}/{total}"
+        src = f"> 来自 [[{book}/CHID/raw|《{book}》{chapter_title}]] · 阅读单元 {n}/{total}"
     return f"""# {head}
 
 {src}
@@ -180,7 +180,7 @@ def main():
         intro_path = os.path.join(unitdir, "00-导读.md")
         toc = "\n".join(f"{i+1}. {u['title']}" for i, (u, _) in enumerate(slices))
         intro_full = (f"# 《{args.book}》{chapter_title} · 导读\n\n"
-                      f"> 来自 [[{args.book}:{chid}]] · 卷层面的入口，读各单元前先看这里\n\n"
+                      f"> 来自 [[{args.book}/{chid}/raw|《{args.book}》{chapter_title}]] · 卷层面的入口，读各单元前先看这里\n\n"
                       f"{intro_md}\n\n## 本章分成 {total} 个阅读单元\n\n{toc}\n")
         with open(intro_path, "w", encoding="utf-8") as fh:
             fh.write(intro_full)
