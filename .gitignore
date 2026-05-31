@@ -2,6 +2,9 @@
 .obsidian/
 *.db
 
+# 原理图源文件，本地保留供改图重渲，不入库（产物 principle.png 才入库）
+principle.html
+
 # insight 五个维度文件夹下的 markdown 产出不入库（保留文件夹骨架 .gitkeep）
 insight/概念/*.md
 insight/你的故事/*.md
