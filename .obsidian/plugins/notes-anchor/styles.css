@@ -1,0 +1,175 @@
+/* 原文里被批注的划线词：暖色高亮 + 虚线下划线 + 小图钉 */
+.annot-mark {
+  background: rgba(181, 101, 29, 0.16);
+  border-bottom: 1.5px dashed #b5651d;
+  border-radius: 3px;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.annot-mark:hover {
+  background: rgba(181, 101, 29, 0.30);
+}
+.annot-mark.annot-end::after {
+  content: "📝";
+  font-size: 0.7em;
+  vertical-align: super;
+  margin-left: 1px;
+  opacity: 0.65;
+}
+
+/* 不同 callout 类型给不同色 */
+.annot-mark[data-type="quote"] { border-bottom-color: #6b7280; background: rgba(107,114,128,0.14); }
+.annot-mark[data-type="tip"]   { border-bottom-color: #3f9142; background: rgba(63,145,66,0.14); }
+.annot-mark[data-type="warning"]{ border-bottom-color: #b8860b; background: rgba(184,134,11,0.16); }
+
+/* 点击弹出的批注卡片 */
+.annot-popup {
+  position: fixed;
+  z-index: 9999;
+  box-sizing: border-box;
+  min-width: 320px;
+  max-width: min(560px, calc(100vw - 24px));
+  background: var(--background-primary, #f4ecd8);
+  color: var(--text-normal, #4a3b2c);
+  border: 1px solid #b5651d;
+  border-left: 4px solid #b5651d;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px 14px;
+  font-size: 0.92em;
+  line-height: 1.6;
+  animation: annot-fade 0.12s ease;
+}
+.annot-popup[data-type="quote"] { border-color: #6b7280; border-left-color: #6b7280; }
+.annot-popup[data-type="tip"]   { border-color: #3f9142; border-left-color: #3f9142; }
+.annot-popup[data-type="warning"]{ border-color: #b8860b; border-left-color: #b8860b; }
+
+/* 锚点：顶部灰色小字 caption + 底部细线，指出批的是哪句，不抢戏。
+   只占一行，超出省略号收尾（原文在弹窗里不重要，悬停 title 看全句）。 */
+.annot-popup-anchor {
+  font-size: 0.8em;
+  color: var(--text-muted, #8a7866);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--background-modifier-border, rgba(0, 0, 0, 0.1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 署名：作者着色 + 图标，右对齐在正文与按钮之间 */
+.annot-popup-sign {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 0.8em;
+  margin-top: 10px;
+  opacity: 0.92;
+}
+.annot-popup-sign.is-me { color: #b5651d; }      /* 我 = 暖橙 */
+.annot-popup-sign.is-claude { color: #3b6ea5; }  /* Claude = 沉蓝 */
+.annot-popup-body > :first-child { margin-top: 0; }
+.annot-popup-body > :last-child { margin-bottom: 0; }
+
+/* 长批注收起：限高 + 底部渐隐，提示「下面还有」 */
+.annot-popup-body.collapsed {
+  max-height: 240px; /* 与 main.js 的 LONG 对应 */
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+          mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+
+/* 展开 / 收起：footer 左侧的轻量文字按钮 */
+.annot-popup-toggle {
+  font-size: 0.78em;
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-muted, #8a7866);
+  cursor: pointer;
+  opacity: 0.85;
+}
+.annot-popup-toggle:hover { opacity: 1; text-decoration: underline; }
+
+.annot-popup-footer {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border, rgba(0,0,0,0.1));
+}
+.annot-popup-btn {
+  font-size: 0.8em;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+.annot-popup-del.armed {
+  color: #fff;
+  background: #c0392b;
+}
+.annot-popup-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: inherit;
+  font-size: inherit; /* 跟查看态正文同字号，编辑前后高度尽量不变 */
+  line-height: 1.6;
+  padding: 6px 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+}
+
+@keyframes annot-fade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 阅读视图划选后浮出的「写笔记」按钮 */
+.annot-sel-btn {
+  position: absolute;
+  z-index: 10000;
+  font-size: 0.8em;
+  padding: 4px 10px;
+  background: var(--background-primary, #f4ecd8);
+  color: #b5651d;
+  border: 1px solid #b5651d;
+  border-radius: 6px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  white-space: nowrap;
+  animation: annot-fade 0.1s ease;
+}
+.annot-sel-btn:hover { background: rgba(181, 101, 29, 0.12); }
+
+/* ---- 写笔记弹框 ---- */
+.annot-modal-anchor {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-left: 3px solid #b5651d;
+  padding: 6px 10px;
+  margin: 8px 0 12px;
+  border-radius: 4px;
+  max-height: 90px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.annot-modal-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.95em;
+  line-height: 1.6;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.annot-modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

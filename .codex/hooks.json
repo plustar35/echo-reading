@@ -17,6 +17,17 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/notes-surface-codex.sh\"",
+            "statusMessage": "Checking unit notes",
+            "timeout": 30
+          }
+        ]
       }
     ]
   }

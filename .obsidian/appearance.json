@@ -1,0 +1,9 @@
+{
+  "cssTheme": "Retroma",
+  "accentColor": "#f4ecd8",
+  "theme": "moonstone",
+  "translucency": true,
+  "enabledCssSnippets": [
+    "reading"
+  ]
+}

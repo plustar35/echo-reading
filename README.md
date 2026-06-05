@@ -49,7 +49,7 @@
 
 一本书入库后(见下「快速开始」),读每一章都是同样的**三阶段循环**:
 
-![echo-reading 一轮阅读流程](principle.png)
+![echo-reading 一轮阅读流程](_image/principle.png)
 
 两件事Agent**全程自动执行、绝不喧宾夺主**:
 - 对话里冒出的理解、连接、共鸣、疑问静默沉淀进 `insight/`，读得越多，聊的越多，agent自然会越来越懂你。

@@ -13,6 +13,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/insight-reminder.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/notes-surface.sh\""
+          }
+        ]
       }
     ]
   }

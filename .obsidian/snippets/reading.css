@@ -1,0 +1,71 @@
+/* =========================================================================
+   reading.css  ·  echo-reading 长读护眼片段
+   叠在 Retroma 主题之上,只覆盖 CSS 变量,主题本身不动。
+   作用域 = 浅色模式(.theme-light / moonstone)。改完去
+   设置 → 外观 → CSS 片段 点刷新、打开开关即可。每段都可单独删。
+   ========================================================================= */
+
+body.theme-light {
+
+  /* ---- 1. 护眼配色:纸张感米黄底 + 暖棕字 -------------------------------- */
+  --background-primary:      #f4ecd8;  /* 正文背景(Sepia) */
+  --background-primary-alt:  #efe6cf;  /* 当前行 / 备选底,略深一点 */
+  --background-secondary:    #ece2c8;  /* 侧栏 / 面板 */
+  --background-secondary-alt:#e6dabc;
+
+  --text-normal:  #4a3b2c;  /* 正文字:暖棕,不用纯黑,不刺眼 */
+  --text-muted:   #7a6a55;  /* 次要文字 */
+  --text-faint:   #a8987f;  /* 最淡文字 */
+
+  /* ---- 2. 强调色:修掉偏淡的 #f4ecd8,换成浅底上看得清的赭石暖橙 -------- */
+  --interactive-accent:        #b5651d;  /* 按钮 / 选中 / 光标 */
+  --interactive-accent-hover:  #c0703a;
+  --text-accent:               #b5651d;  /* 链接文字 */
+  --text-accent-hover:         #8f4f17;
+  --link-color:                #b5651d;
+  --link-color-hover:          #8f4f17;
+  --text-selection:            #e3cfa0;  /* 选中高亮底色 */
+
+  /* ---- 3. 长读排版:字号 / 行距 / 行宽 ----------------------------------- */
+  --font-text-size:    18px;   /* 正文字号,长文舒服点 */
+  --line-height-normal: 1.75;  /* 行距,留白透气 */
+  --file-line-width:   40rem;  /* 单行最大宽度,太宽不利长读 */
+
+  /* ---- 4. 标题:暖棕系,层级分明又不跳 ---------------------------------- */
+  --h1-color: #6b4a2b;
+  --h2-color: #7a5631;
+  --h3-color: #8a6438;
+}
+
+/* ---- 5. 行内代码 / 引用块:轻微底色,读古籍注疏时更清楚 ----------------- */
+body.theme-light code {
+  background: #e7dcc0;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+body.theme-light .markdown-rendered blockquote {
+  border-left: 3px solid #b5651d;
+  background: #efe6cf;
+}
+
+/* ---- 6. 左侧文件树:取消 Retroma 红/橙彩虹循环,统一成沉静暖棕 --------- */
+/*   只改 --folder-tone 这一行就能换整棵树的文件夹颜色。               */
+body.theme-light {
+  --folder-tone: #96632e;          /* 赭棕,和正文/标题同一暖色家族 */
+
+  --folder-color-1:  var(--folder-tone);
+  --folder-color-2:  var(--folder-tone);
+  --folder-color-3:  var(--folder-tone);
+  --folder-color-4:  var(--folder-tone);
+  --folder-color-5:  var(--folder-tone);
+  --folder-color-6:  var(--folder-tone);
+  --folder-color-7:  var(--folder-tone);
+  --folder-color-8:  var(--folder-tone);
+  --folder-color-9:  var(--folder-tone);
+  --folder-color-10: var(--folder-tone);
+  --folder-color-11: var(--folder-tone);
+  --folder-color-12: var(--folder-tone);
+  --folder-color-13: var(--folder-tone);
+  --folder-color-14: var(--folder-tone);
+  --folder-color-15: var(--folder-tone);
+}

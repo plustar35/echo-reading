@@ -1,0 +1,9 @@
+{
+  "id": "notes-anchor",
+  "name": "Notes Anchor (批注旁车)",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "把同目录 *.notes.md 里的批注，按「划线：原文词」投影到原文上，点击弹出。原文文件零改动。",
+  "author": "Plustar",
+  "isDesktopOnly": false
+}

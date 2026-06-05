@@ -1,0 +1,12 @@
+{
+  "file-explorer:new-file-in-new-pane": [],
+  "notes-anchor:write-note": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "N"
+    }
+  ]
+}

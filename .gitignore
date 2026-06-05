@@ -1,12 +1,16 @@
 .DS_Store
-.obsidian/
 *.db
+
+# Obsidian:共享外观 / 主题 / 插件 / 快捷键等配置,但忽略本机会话状态与易变数据
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/realclaudian/data.json
 
 # Python 编译缓存（chapter-split 等 skill 跑过留下的产物）
 __pycache__/
 *.pyc
 
-# 原理图源文件，本地保留供改图重渲，不入库（产物 principle.png 才入库）
+# 原理图源文件，本地保留供改图重渲，不入库（产物 _image/principle.png 才入库）
 principle.html
 
 # insight 五个维度文件夹下的 markdown 产出不入库（保留文件夹骨架 .gitkeep）
