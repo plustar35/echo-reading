@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>unit-video · 书级配置台</title>
+<style>
+  :root{--paper:#ece4d2;--dim:#9aa1a3;--accent:#b3401f;--gold:#9a7b2e;--bg:#0a0c0d;--card:#15191a;--line:#2c3335}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--paper);font-family:"PingFang SC","Hiragino Sans GB",sans-serif;min-height:100vh;padding:16px 20px 40px}
+  header{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+  header h1{font-size:16px;font-weight:600}
+  header h1 small{color:var(--dim);font-weight:400;margin-left:8px;font-size:12px}
+  .tabs{display:flex;gap:6px}
+  .tabs button{background:var(--card);color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:7px 16px;font-size:13px;cursor:pointer;font-family:inherit}
+  .tabs button.on{color:var(--paper);border-color:var(--accent);background:#1e1513}
+  #save{margin-left:auto;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  #save:hover{filter:brightness(1.1)}
+  #status{font-size:12px;color:var(--gold);min-width:120px}
+
+  .row{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+  .panel{width:330px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+  legend{font-size:12px;color:var(--gold);padding:0 6px}
+  .frow{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12.5px;color:var(--dim);flex-wrap:wrap}
+  .frow label{width:78px;flex-shrink:0}
+  .frow input[type=number]{width:64px}
+  .frow input[type=text]{flex:1;min-width:90px}
+  input[type=number],input[type=text]{background:#0e1112;color:var(--paper);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-size:12.5px;font-family:inherit}
+  input[type=color]{width:34px;height:24px;border:1px solid var(--line);border-radius:5px;background:none;padding:0;cursor:pointer}
+  .btn{background:#1b2022;color:var(--paper);border:1px solid var(--line);border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .hint{font-size:11.5px;color:#6b7376;line-height:1.6}
+  .val{color:var(--paper)}
+
+  /* 画面台：底板 + 可拖拽覆盖框 */
+  #stage{position:relative;width:min(880px,62vw);aspect-ratio:16/9;background-size:cover;background-position:center;
+    border-radius:10px;overflow:hidden;box-shadow:0 18px 50px -18px rgba(0,0,0,.8);user-select:none;flex-shrink:0}
+  .rect{position:absolute;border:2px dashed var(--accent);border-radius:6px;cursor:move;touch-action:none}
+  .rect .tag{position:absolute;top:-20px;left:0;font-size:11px;background:var(--accent);color:#fff;padding:1px 7px;border-radius:4px;white-space:nowrap}
+  .rect .hdl{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:nwse-resize}
+  #subRect{border-color:#7fa583;cursor:ns-resize}
+  #subRect .tag{background:#7fa583;color:#08140b}
+  #titleDot{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:move;transform:translate(-50%,-50%);touch-action:none}
+  #titleDot .tag{position:absolute;top:-22px;left:-8px;font-size:11px;background:var(--gold);color:#1c1503;padding:1px 7px;border-radius:4px;white-space:nowrap}
+  #boardSample{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:14px;
+    font-family:"Songti SC",serif;font-size:20px;pointer-events:none}
+
+  /* 模板台 */
+  #pv{width:min(880px,62vw);aspect-ratio:16/9;border:1px solid var(--line);border-radius:10px;background:#000;flex-shrink:0}
+  .tplbtns{display:flex;gap:6px;flex-wrap:wrap}
+  .tplbtns button{background:var(--card);color:var(--dim);border:1px solid var(--line);border-radius:7px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .tplbtns button.on{color:var(--paper);border-color:var(--accent);background:#1e1513}
+  video{width:100%;border-radius:8px;background:#000}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">配置台<small>书级初始化 · 保存写回 配置.js</small></h1>
+  <div class="tabs">
+    <button id="tab1btn" class="on">画面与参数</button>
+    <button id="tab2btn">模板样例</button>
+  </div>
+  <span id="status"></span>
+  <button id="save">保存固化</button>
+</header>
+
+<div id="tab1" class="row">
+  <div id="stage">
+    <div class="rect" id="boardRect"><span class="tag">看板</span><span class="hdl"></span>
+      <div id="boardSample"><span id="smpInk">墨字樣例</span><span id="smpAccent">朱砂點亮</span><span id="smpInk2">次級註文</span></div>
+    </div>
+    <div class="rect" id="subRect"><span class="tag">字幕带（拖=离底，左右内缩用输入框）</span></div>
+    <div id="titleDot"><span class="tag">章名</span></div>
+  </div>
+  <div class="panel">
+    <fieldset><legend>看板框（% of 画面）</legend>
+      <div class="frow"><label>左 / 上</label><input type="number" step="0.1" id="bL"><input type="number" step="0.1" id="bT"></div>
+      <div class="frow"><label>宽 / 高</label><input type="number" step="0.1" id="bW"><input type="number" step="0.1" id="bH"></div>
+    </fieldset>
+    <fieldset><legend>章名位置 / 字幕带（%）</legend>
+      <div class="frow"><label>章名 左/上</label><input type="number" step="0.1" id="tL"><input type="number" step="0.1" id="tT"></div>
+      <div class="frow"><label>字幕 缩/底</label><input type="number" step="0.1" id="sS"><input type="number" step="0.1" id="sB"></div>
+    </fieldset>
+    <fieldset><legend>配色（在左侧看板上看对比度）</legend>
+      <div class="frow"><label>主字 ink</label><input type="color" id="cInk"><label style="width:auto">次字 ink2</label><input type="color" id="cInk2"></div>
+      <div class="frow"><label>强调 accent</label><input type="color" id="cAccent"><label style="width:auto">金 gold</label><input type="color" id="cGold"></div>
+      <div class="frow"><label>纸面 paper</label><input type="color" id="cPaper"><span class="hint">paper 是界面字色基调，不画看板</span></div>
+    </fieldset>
+    <fieldset><legend>片头视频 · 时间参数</legend>
+      <video id="introVid" controls muted preload="metadata"></video>
+      <div class="frow"><button class="btn" id="markReady">⏱ 当前帧 = 看板就绪时刻</button>
+        <span>scrollReadyMs：<b class="val" id="vReady">—</b></span></div>
+      <div class="frow"><button class="btn" id="markIntro">⏱ 视频时长 = introVideoMs</button>
+        <span>introVideoMs：<b class="val" id="vIntro">—</b></span></div>
+      <p class="hint">拖到看板（卷轴）完全展开、可以往上写字的那一帧，点上面按钮。</p>
+    </fieldset>
+    <fieldset><legend>嗓音</legend>
+      <div class="frow"><label>voice</label><input type="text" id="voice"></div>
+      <div class="frow"><label>rate</label><input type="text" id="rate"></div>
+    </fieldset>
+  </div>
+</div>
+
+<div id="tab2" class="row" style="display:none">
+  <iframe id="pv"></iframe>
+  <div class="panel">
+    <fieldset><legend>模板（与成片同一渲染器，所见即所得）</legend>
+      <div class="tplbtns" id="tplBtns"></div>
+    </fieldset>
+    <fieldset id="varBox"><legend>本模板的字体 / 字号（留空 = 用默认）</legend>
+      <div id="varCtrls"></div>
+      <p class="hint">字号单位 cqw（画面宽的 1%）。改动即时生效；「保存固化」写进 配置.js 的 tplVars。看板几何/配色在「画面与参数」页改，这里同步预览。</p>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const r1=v=>Math.round(v*10)/10;
+let BOOK="", cfg=null, curTpl=0;
+
+// ── 模板菜单（当前核心五套；将来模板包化后从包元数据读） ──
+const TPLS=[
+ {name:"T0 开场白", beat:0, vars:[["--sub-size","字幕字号","1.7cqw"]]},
+ {name:"T3 中央大字", beat:1, vars:[["--glyph-size","大字字号","7cqw"],["--glyph-font","大字字体",'"Weibei SC","STKaiti",serif']]},
+ {name:"T2 标题+引", beat:2, vars:[["--c-title-size","标题字号","2.9cqw"],["--c-lead-size","引句字号","1.6cqw"]]},
+ {name:"T1 原文+注", beat:3, vars:[["--jing-size","原文字号","2.3cqw"],["--jing-font","原文字体",'"Songti SC","STSong",serif'],
+   ["--aux-head-size","看板标题字号","1.85cqw"],["--aux-gloss-size","字词注字号","1.2cqw"],["--aux-pt-size","要点字号","1.3cqw"]]},
+ {name:"T4 一句话", beat:4, vars:[["--big-size","大字字号","2.7cqw"]]},
+];
+
+// ── 配置 → CSS 变量（与 renderer.varsFromConfig 同一映射） ──
+function allVars(){
+  const c=cfg,v={};
+  v["--board-left"]=c.board.left+"%";v["--board-top"]=c.board.top+"%";
+  v["--board-w"]=c.board.width+"%";v["--board-h"]=c.board.height+"%";
+  v["--title-left"]=c.titlePos.left+"%";v["--title-top"]=c.titlePos.top+"%";
+  v["--sub-side"]=c.subtitle.side+"%";v["--sub-bottom"]=c.subtitle.bottom+"%";
+  const m={paper:"--paper",ink:"--ink",ink2:"--ink2",accent:"--cinnabar",gold:"--gold"};
+  for(const k in m)v[m[k]]=c.palette[k];
+  for(const t of TPLS)for(const[k]of t.vars)v[k]=cfg.tplVars[k]||null;   // null=清除回默认
+  Object.assign(v,cfg.tplVars);
+  return v;
+}
+function push(){ const f=$("#pv"); if(f&&f.contentWindow)f.contentWindow.postMessage({type:"unitVideoVars",vars:allVars()},"*"); }
+
+// ── 同步：cfg → 覆盖框 / 输入框 ──
+function sync(){
+  const b=cfg.board;
+  Object.assign($("#boardRect").style,{left:b.left+"%",top:b.top+"%",width:b.width+"%",height:b.height+"%"});
+  const s=cfg.subtitle;
+  Object.assign($("#subRect").style,{left:s.side+"%",right:s.side+"%",width:"auto",bottom:s.bottom+"%",height:"8%"});
+  Object.assign($("#titleDot").style,{left:cfg.titlePos.left+"%",top:cfg.titlePos.top+"%"});
+  const set=(id,v)=>{const el=$(id);if(document.activeElement!==el)el.value=v;};
+  set("#bL",b.left);set("#bT",b.top);set("#bW",b.width);set("#bH",b.height);
+  set("#tL",cfg.titlePos.left);set("#tT",cfg.titlePos.top);
+  set("#sS",s.side);set("#sB",s.bottom);
+  set("#cInk",cfg.palette.ink);set("#cInk2",cfg.palette.ink2);set("#cAccent",cfg.palette.accent);
+  set("#cGold",cfg.palette.gold);set("#cPaper",cfg.palette.paper);
+  set("#voice",cfg.voice);set("#rate",cfg.rate);
+  $("#smpInk").style.color=cfg.palette.ink;$("#smpAccent").style.color=cfg.palette.accent;$("#smpInk2").style.color=cfg.palette.ink2;
+  $("#vReady").textContent=cfg.scrollReadyMs+" ms";$("#vIntro").textContent=cfg.introVideoMs+" ms";
+  push();
+}
+
+// ── 拖拽 ──
+function dragXY(el,onMove,opts){
+  el.addEventListener("pointerdown",e=>{
+    if(e.target.classList.contains("hdl")&&!opts?.isHandle)return;
+    e.preventDefault();el.setPointerCapture(e.pointerId);
+    const R=$("#stage").getBoundingClientRect(),sx=e.clientX,sy=e.clientY,snap=JSON.parse(JSON.stringify(cfg));
+    const mv=ev=>{onMove(snap,(ev.clientX-sx)/R.width*100,(ev.clientY-sy)/R.height*100);sync();};
+    const up=()=>{el.removeEventListener("pointermove",mv);el.removeEventListener("pointerup",up);};
+    el.addEventListener("pointermove",mv);el.addEventListener("pointerup",up);
+  });
+}
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+dragXY($("#boardRect"),(s,dx,dy)=>{
+  cfg.board.left=r1(clamp(s.board.left+dx,0,100-s.board.width));
+  cfg.board.top=r1(clamp(s.board.top+dy,0,100-s.board.height));
+});
+dragXY($("#boardRect").querySelector(".hdl"),(s,dx,dy)=>{
+  cfg.board.width=r1(clamp(s.board.width+dx,5,100-s.board.left));
+  cfg.board.height=r1(clamp(s.board.height+dy,5,100-s.board.top));
+},{isHandle:true});
+dragXY($("#subRect"),(s,dx,dy)=>{ cfg.subtitle.bottom=r1(clamp(s.subtitle.bottom-dy,0,40)); });
+dragXY($("#titleDot"),(s,dx,dy)=>{
+  cfg.titlePos.left=r1(clamp(s.titlePos.left+dx,0,100));
+  cfg.titlePos.top=r1(clamp(s.titlePos.top+dy,0,100));
+});
+
+// ── 输入框 → cfg ──
+const bind=(id,fn)=>$(id).addEventListener("input",e=>{fn(e.target.value);sync();});
+bind("#bL",v=>cfg.board.left=+v);bind("#bT",v=>cfg.board.top=+v);
+bind("#bW",v=>cfg.board.width=+v);bind("#bH",v=>cfg.board.height=+v);
+bind("#tL",v=>cfg.titlePos.left=+v);bind("#tT",v=>cfg.titlePos.top=+v);
+bind("#sS",v=>cfg.subtitle.side=+v);bind("#sB",v=>cfg.subtitle.bottom=+v);
+bind("#cInk",v=>cfg.palette.ink=v);bind("#cInk2",v=>cfg.palette.ink2=v);
+bind("#cAccent",v=>cfg.palette.accent=v);bind("#cGold",v=>cfg.palette.gold=v);
+bind("#cPaper",v=>cfg.palette.paper=v);
+bind("#voice",v=>cfg.voice=v);bind("#rate",v=>cfg.rate=v);
+
+// ── 片头视频 ──
+$("#markReady").onclick=()=>{cfg.scrollReadyMs=Math.round($("#introVid").currentTime*1000);sync();};
+$("#markIntro").onclick=()=>{const d=$("#introVid").duration;if(d)cfg.introVideoMs=Math.round(d*1000);sync();};
+
+// ── 模板页 ──
+function loadTpl(i){
+  curTpl=i;
+  [...$("#tplBtns").children].forEach((b,k)=>b.classList.toggle("on",k===i));
+  $("#pv").src=`/scripts/renderer.html?data=studio-sample.js&beat=${TPLS[i].beat}&bare=1`;
+  const box=$("#varCtrls");box.innerHTML="";
+  for(const[k,label,dft]of TPLS[i].vars){
+    const row=document.createElement("div");row.className="frow";
+    row.innerHTML=`<label title="${k}">${label}</label><input type="text" data-k="${k}" placeholder="${dft.replace(/"/g,"&quot;")}">`;
+    const inp=row.querySelector("input");
+    inp.value=cfg.tplVars[k]||"";
+    inp.addEventListener("input",()=>{
+      if(inp.value.trim())cfg.tplVars[k]=inp.value.trim();else delete cfg.tplVars[k];
+      push();
+    });
+    box.appendChild(row);
+  }
+}
+$("#pv").addEventListener("load",push);
+
+// ── 页签 / 保存 ──
+$("#tab1btn").onclick=()=>{$("#tab1").style.display="flex";$("#tab2").style.display="none";$("#tab1btn").classList.add("on");$("#tab2btn").classList.remove("on");};
+$("#tab2btn").onclick=()=>{$("#tab1").style.display="none";$("#tab2").style.display="flex";$("#tab2btn").classList.add("on");$("#tab1btn").classList.remove("on");if(!$("#pv").src)loadTpl(0);};
+$("#save").onclick=async()=>{
+  $("#status").textContent="保存中…";
+  const r=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+  const j=await r.json();
+  $("#status").textContent=j.ok?"✓ 已写回 配置.js（旧文件 .bak）":"✗ "+j.error;
+};
+
+// ── 启动 ──
+(async()=>{
+  BOOK=(await(await fetch("/api/meta")).json()).book;
+  cfg=await(await fetch("/api/config")).json();
+  $("#title").innerHTML=`《${BOOK}》配置台<small>书级初始化 · 保存写回 配置.js</small>`;
+  const idPath=BOOK.split("/").map(encodeURIComponent).join("/");   // 素材套含 / 时别编码掉
+  $("#stage").style.backgroundImage=`url('/assets/${idPath}/底板.png')`;
+  $("#introVid").src=`/assets/${idPath}/片头.mp4`;
+  TPLS.forEach((t,i)=>{const b=document.createElement("button");b.textContent=t.name;b.onclick=()=>loadTpl(i);$("#tplBtns").appendChild(b);});
+  sync();
+  if(new URLSearchParams(location.search).get("tab")==="2")$("#tab2btn").click();
+})();
+</script>
+</body>
+</html>
