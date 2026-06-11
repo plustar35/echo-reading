@@ -13,6 +13,9 @@ __pycache__/
 # 原理图源文件，本地保留供改图重渲，不入库（产物 _image/principle.png 才入库）
 principle.html
 
+# unit-video skill 本地开发中，暂不入库
+.claude/skills/unit-video/
+
 # insight 五个维度文件夹下的 markdown 产出不入库（保留文件夹骨架 .gitkeep）
 insight/概念/*.md
 insight/你的故事/*.md

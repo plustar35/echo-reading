@@ -1,0 +1,397 @@
+/* ============ Echo Reading Dashboard ============ */
+
+.echo-dash {
+  padding: 36px clamp(24px, 6vw, 80px) 72px;
+  overflow-y: auto;
+  user-select: none;
+}
+
+/* 内容整体居中，限制最大行宽，两侧自然留白 */
+.echo-dash > div {
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- header ---------- */
+
+.echo-dash .ed-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.echo-dash .ed-title {
+  margin: 0;
+  font-size: 1.7em;
+  letter-spacing: 0.04em;
+}
+
+.echo-dash .ed-subtitle {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  margin-top: 2px;
+}
+
+.echo-dash .ed-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.echo-dash .ed-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.echo-dash .ed-pill-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.echo-dash .ed-refresh {
+  cursor: pointer;
+  color: var(--text-faint);
+  padding: 6px;
+  border-radius: 6px;
+}
+.echo-dash .ed-refresh:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+.echo-dash .ed-refresh svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- sections ---------- */
+
+.echo-dash .ed-section {
+  margin-top: 40px;
+}
+
+.echo-dash .ed-section-title {
+  font-size: var(--font-ui-medium);
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+/* ---------- books ---------- */
+
+.echo-dash .ed-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.echo-dash .ed-book-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.echo-dash .ed-book-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+.echo-dash .ed-book-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.echo-dash .ed-ring {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.echo-dash .ed-ring-bg {
+  stroke: var(--background-modifier-border);
+}
+.echo-dash .ed-ring-fg {
+  stroke: var(--interactive-accent);
+  transition: stroke-dasharray 0.4s ease;
+}
+.echo-dash .ed-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.echo-dash .ed-book-info {
+  min-width: 0;
+}
+
+.echo-dash .ed-book-name {
+  font-weight: 700;
+  font-size: 1.05em;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.echo-dash .ed-book-name:hover {
+  color: var(--interactive-accent);
+}
+
+.echo-dash .ed-book-stat {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-top: 2px;
+}
+
+.echo-dash .ed-book-pos {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  min-width: 0;
+}
+.echo-dash .ed-book-pos.is-clickable {
+  cursor: pointer;
+}
+.echo-dash .ed-book-pos.is-clickable:hover .ed-pos-text {
+  color: var(--interactive-accent);
+}
+.echo-dash .ed-pos-icon svg {
+  width: 12px;
+  height: 12px;
+  color: var(--interactive-accent);
+}
+.echo-dash .ed-pos-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 章节点阵 */
+.echo-dash .ed-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 14px;
+}
+.echo-dash .ed-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--background-modifier-border);
+  transition: transform 0.1s ease;
+}
+.echo-dash .ed-dot.is-done {
+  background: var(--interactive-accent);
+}
+.echo-dash .ed-dot.is-partial {
+  background: var(--interactive-accent);
+  opacity: 0.45;
+}
+.echo-dash .ed-dot.is-clickable {
+  cursor: pointer;
+}
+.echo-dash .ed-dot.is-clickable:hover {
+  transform: scale(1.45);
+}
+
+.echo-dash .ed-book-review {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--background-modifier-border);
+  font-size: var(--font-ui-smaller);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.echo-dash .ed-review-tag {
+  flex-shrink: 0;
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+.echo-dash .ed-review-text {
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- heatmap ---------- */
+
+.echo-dash .ed-heat-wrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.echo-dash .ed-heat {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  gap: 3px;
+  width: max-content;
+}
+.echo-dash .ed-heat-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2.5px;
+  background: var(--background-modifier-border);
+}
+.echo-dash .ed-heat-cell.lv-1 {
+  background: var(--interactive-accent);
+  opacity: 0.3;
+}
+.echo-dash .ed-heat-cell.lv-2 {
+  background: var(--interactive-accent);
+  opacity: 0.6;
+}
+.echo-dash .ed-heat-cell.lv-3 {
+  background: var(--interactive-accent);
+  opacity: 1;
+}
+
+/* ---------- insights ---------- */
+
+.echo-dash .ed-insight-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.echo-dash .ed-insight-hint {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.echo-dash .ed-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.echo-dash .ed-chip {
+  --dim-color: hsl(var(--dim-hue) 65% 55%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--dim-color) 40%, transparent);
+  background: color-mix(in srgb, var(--dim-color) 10%, transparent);
+  color: var(--text-normal);
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.echo-dash .ed-chip:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--dim-color) 22%, transparent);
+}
+.echo-dash .ed-chip.is-active {
+  background: color-mix(in srgb, var(--dim-color) 32%, transparent);
+  border-color: var(--dim-color);
+  font-weight: 700;
+}
+.echo-dash .ed-chip-icon svg {
+  width: 13px;
+  height: 13px;
+  color: var(--dim-color);
+}
+
+.echo-dash .ed-insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.echo-dash .ed-insight-row {
+  --dim-color: hsl(var(--dim-hue) 65% 55%);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  border-left: 3px solid color-mix(in srgb, var(--dim-color) 65%, transparent);
+  background: var(--background-secondary);
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+.echo-dash .ed-insight-row:hover {
+  transform: translateX(2px);
+  border-color: var(--dim-color);
+}
+
+.echo-dash .ed-insight-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.echo-dash .ed-insight-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.echo-dash .ed-star {
+  color: var(--color-yellow, #e5b567);
+  font-size: 0.85em;
+}
+.echo-dash .ed-insight-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.echo-dash .ed-insight-dim {
+  flex-shrink: 0;
+  font-size: 0.72em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dim-color) 16%, transparent);
+  color: var(--dim-color);
+}
+
+.echo-dash .ed-insight-summary {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.echo-dash .ed-insight-date {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.echo-dash .ed-empty {
+  color: var(--text-faint);
+  padding: 18px;
+  text-align: center;
+}
