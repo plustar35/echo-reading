@@ -1,8 +1,9 @@
 {
-  "cssTheme": "Baseline",
-  "accentColor": "",
+  "cssTheme": "Retroma",
+  "accentColor": "#f4ecd8",
   "theme": "moonstone",
   "translucency": true,
-  "enabledCssSnippets": [],
-  "baseFontSize": 16
+  "enabledCssSnippets": [
+    "reading"
+  ]
 }
