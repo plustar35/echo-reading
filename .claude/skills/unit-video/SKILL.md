@@ -2,9 +2,9 @@
 name: unit-video
 description: >-
   把一个阅读单元的「备读」做成「领读视频 / 备读视频 / 讲解视频」：
-  作者第一人称、课件式讲解、16:9 横屏。从 books/<书>/chNN/NN.md 出发，
+  作者第一人称、课件式讲解、16:9 横屏。当前仅支持《道德经》。从 books/道德经/chNN/NN.md 出发，
   经「口播稿 → TTS 时间轴 → 分镜 atoms/steps → 渐进渲染」产出
-  video/<书>/chNN/NN/领读视频.mp4。用户要求把某章、某单元或备读内容做成视频、
+  video/道德经/chNN/NN/领读视频.mp4。用户要求把《道德经》某章、某单元或备读内容做成视频、
   重渲视频、检查视频流程时，使用本 skill。
 ---
 
@@ -63,7 +63,13 @@ validate-storyboard → align → layout-check → render-video
 
 ## 一单元管线
 
-### 0. 解析素材套
+### 0. 适用范围拦截
+
+当前只支持《道德经》的备读视频制作，所有模板、规范都是为道德经定制的，尚不具备通用性，其他书籍无法制作
+
+如果请求目标不是 `books/道德经/chNN/NN.md`，立即停止，向用户说明：当前 `unit-video` 只支持《道德经》，其他书籍的视频模板尚未接入。禁止强行向用户交付任何中间产物，浪费token。
+
+### 1. 解析素材套
 
 先看 `SKILL/assets/<书>/`：
 
@@ -72,7 +78,7 @@ validate-storyboard → align → layout-check → render-video
 - 没有素材或缺 `片头.mp4 / 背景循环.mp4 / 底板.png`：停止，报告需要先导入基础素材资产；素材准备不属于单元制作管线。
 - 有素材但没有 `配置.js`：按 `references/资产层与新书.md` 启动配置台初始化。这是唯一需要用户 review 和微调的环节；完成后再进入单元制作。
 
-### 1. 写口播稿
+### 2. 写口播稿
 
 从 `<unit>` 的备读第 1–7 段提炼，写：
 
@@ -82,7 +88,7 @@ validate-storyboard → align → layout-check → render-video
 
 要求见 `references/口播稿规范.md`。口播稿只写要讲出口的话，不写画面指令、模板、秒数或 reveal 标记。
 
-### 2. 配音并生成时间轴
+### 3. 配音并生成时间轴
 
 ```bash
 node SKILL/dist/cli/gen-tts.js <out>/
@@ -95,7 +101,7 @@ VOICE=zh-CN-YunxiNeural RATE=-10% node SKILL/dist/cli/gen-tts.js <out>/
 ENGINE=say node SKILL/dist/cli/gen-tts.js <out>/   # 离线兜底，时间轴降级为段级
 ```
 
-### 3. 生成分镜骨架
+### 4. 生成分镜骨架
 
 ```bash
 node SKILL/dist/cli/draft-storyboard.js <out>/
@@ -111,7 +117,7 @@ node SKILL/dist/cli/draft-storyboard.js <out>/
 - 按模板需要给 step 填摘要性板书和高亮：`state` + `show`；T0/T3 这类无 reveal 模板只覆盖 atoms。
 - 保证每个模板的 `capacity` 不超限；超限就拆下一个 beat。
 
-### 4. 静态校验、对齐、布局检查
+### 5. 静态校验、对齐、布局检查
 
 ```bash
 node SKILL/dist/cli/validate-storyboard.js <out>/分镜.js
@@ -121,7 +127,7 @@ node SKILL/dist/cli/layout-check.js <out>/分镜.js
 
 `validate-storyboard.js` 负责 atoms/take、模板字段、jing/hi、capacity 等硬校验；`align-durs.js` 只在校验通过后回填 `durs[] / stepDurs[]`；`layout-check.js` 负责真实 DOM 溢出检查。失败时按错误修分镜，不绕过。
 
-### 5. 渲染成片
+### 6. 渲染成片
 
 ```bash
 bash SKILL/runtime/render-video.sh <out>/分镜.js
