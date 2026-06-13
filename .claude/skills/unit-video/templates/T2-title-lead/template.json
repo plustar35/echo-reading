@@ -1,0 +1,22 @@
+{
+  "id": "T2",
+  "name": "标题 + 引",
+  "purpose": "引子、过渡、结构转场。标题先出，引句/结构提示逐步出现。",
+  "base": { "allowed": ["title"] },
+  "stepState": { "allowed": [] },
+  "stepShow": { "allowed": ["center", "lead", "note", "title"] },
+  "constraints": { "maxCenterItemsPerStep": 2, "maxTextChars": 22 },
+  "capacity": {
+    "area": "center",
+    "basis": "道德经/水墨卷轴 1280x720；center 使用完整 board，左右内缩 6%。",
+    "perStep": { "maxNewCenterItems": 1, "maxTextChars": 24, "maxVisualLines": 2 },
+    "perBeat": {
+      "maxSteps": 3,
+      "maxCenterItems": 3,
+      "maxTitleItems": 1,
+      "maxLeadItems": 2,
+      "maxTextChars": 64,
+      "maxVisualLines": 5
+    }
+  }
+}

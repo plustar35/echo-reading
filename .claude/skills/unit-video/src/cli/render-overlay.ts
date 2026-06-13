@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+// @ts-nocheck
 /* 离屏渲染叠层：用 CDP 虚拟时间逐帧推进 renderer.html?record=1 页面，截透明 PNG 序列。
  * 之后在 ffmpeg 里把这套 PNG 叠到背景视频上。一般由 render-video.sh 调用。
- * 用法： node render-overlay.js "<renderer.html?...&record=1 的 file:// URL>"
+ * 用法： node dist/cli/render-overlay.js "<runtime/renderer.html?...&record=1 的 file:// URL>"
  * env:  OUT(输出目录) FPS(默认24) MAXF(限制帧数,调试用,0=全部) PORT */
 const {spawn}=require('child_process');
 const http=require('http'), fs=require('fs'), path=require('path');
@@ -88,3 +89,5 @@ function withTO(p,ms,label){return Promise.race([p,new Promise((_,rej)=>setTimeo
   console.error('done -> '+OUT);
   process.exit(0);
 })().catch(e=>{console.error('ERROR',e);process.exit(1);});
+
+export {};

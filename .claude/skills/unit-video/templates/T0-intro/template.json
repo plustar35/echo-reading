@@ -1,0 +1,13 @@
+{
+  "id": "T0",
+  "name": "开场字幕",
+  "purpose": "卷轴/白板就绪前的片头引入，只显示字幕。",
+  "base": { "allowed": [] },
+  "stepState": { "allowed": [] },
+  "stepShow": { "allowed": [] },
+  "capacity": {
+    "area": "none",
+    "basis": "T0 不进入白板空间，只显示字幕。",
+    "perBeat": { "maxWhiteboardItems": 0 }
+  }
+}

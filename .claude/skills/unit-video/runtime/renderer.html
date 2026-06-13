@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>领读视频 · 通用渲染器</title>
+<style>
+  :root{--paper:#ece4d2;--paper-dim:#b7ad97;--ink:#3a3322;
+    --ink2:#5a4f37;--cinnabar:#b3401f;--gold:#9a7b2e;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#0a0c0d;color:var(--paper);font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    display:flex;flex-direction:column;align-items:center;min-height:100%;padding:18px 16px 36px;gap:13px}
+  .topbar{width:100%;max-width:1040px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .topbar h1{font-size:14px;font-weight:500;letter-spacing:.05em;color:var(--paper-dim)}
+  .topbar h1 b{color:var(--paper);font-weight:600}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--paper-dim);cursor:pointer;user-select:none}
+  .toggle input{display:none}
+  .toggle .sw{width:34px;height:18px;border-radius:10px;background:#2a2f31;position:relative;transition:.2s}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#7c8488;transition:.2s}
+  .toggle input:checked + .sw{background:#7a5a2f}
+  .toggle input:checked + .sw::after{left:18px;background:var(--gold)}
+  .wrap{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+
+  .stage{position:relative;width:min(960px,94vw);aspect-ratio:16/9;border-radius:12px;overflow:hidden;
+    background:#0a0c0d;background-size:cover;background-position:center;
+    box-shadow:0 24px 60px -18px rgba(0,0,0,.8);container-type:inline-size}
+
+  .intro{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000;transition:opacity .5s ease}
+  .intro.gone{opacity:0;pointer-events:none}
+
+  /* 正文背景：整板呼吸感循环（垫最底，经文/讲师静止层叠其上） */
+  .bg-loop{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+
+  .body-layer{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .6s ease}
+  .body-layer.show{opacity:1}
+
+  /* ── 看板（道德经=卷轴绢帛）。几何由书级 配置.js 的 board 提供（--board-* CSS 变量），
+       缺省值=道德经底板实测。所有模板都铺在这个框里，内容在框内【上下居中】，
+       文字在各自小框里靠【左/顶】对齐、不居中。 ── */
+  .scroll{position:absolute;left:var(--board-left,40%);width:var(--board-w,49.5%);top:var(--board-top,46%);height:var(--board-h,38%)}
+  .scroll-title{position:absolute;left:var(--title-left,87.5%);top:var(--title-top,50%);writing-mode:vertical-rl;font-family:"Songti SC",serif;
+    font-size:1.5cqw;color:var(--cinnabar);letter-spacing:.1em;opacity:.8}
+
+  /* 右：经文区（竖排，逐句呈现、点亮）。区内整块上下居中（满足"上下居中"）；
+       竖排文字本身从【顶部】起、逐列右→左铺（满足"顶部对齐、不居中"） */
+  .jing{position:absolute;right:2%;top:10%;width:51%;height:80%;opacity:0;transition:opacity .5s ease}
+  .jing.show{opacity:1}
+  .sent{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .5s ease}
+  .sent.on{opacity:1}
+  /* 经文【统一字号】：长短句一律同号，不为长句单独缩小（靠多分列容纳） */
+  .cols{writing-mode:vertical-rl;max-height:100%;font-family:var(--jing-font,"Songti SC","STSong","SimSun",serif);
+    font-size:var(--jing-size,2.3cqw);line-height:1.7;letter-spacing:.04em;color:var(--ink2);text-align:start}
+  .ph{transition:color .35s ease,text-shadow .35s ease;color:var(--ink2)}
+  .ph.dim{opacity:.42}
+  .ph.hi{color:var(--cinnabar);font-weight:600;text-shadow:0 0 13px rgba(179,64,31,.4);animation:bloom .5s ease both}
+  @keyframes bloom{0%{color:var(--gold)}60%{color:#d65a2e}100%{color:var(--cinnabar)}}
+  .punc{color:#8a7e60;opacity:.55}
+
+  /* 左：辅助区 = 结构化小看板（主题标题 + 字词注 + 要点 / 列表），单看也能懂 */
+  .aux{position:absolute;left:3%;top:3%;width:42%;height:94%;display:flex;flex-direction:column;
+    align-items:flex-start;justify-content:center;text-align:left;gap:.85cqw;opacity:0;transition:opacity .5s ease;font-family:"Songti SC",serif}
+  .aux.show{opacity:1}
+  .aux-slot{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:.55cqw}
+  .aux-head-slot{gap:0}
+  .aux-body-slot{gap:.55cqw}
+  .aux-item{opacity:0;transform:translateX(8px);transition:.45s ease var(--d,0s)}
+  .aux-item.in{opacity:1;transform:none}
+  .aux-head{font-size:var(--aux-head-size,1.85cqw);color:var(--cinnabar);font-weight:600;letter-spacing:.04em;
+    position:relative;padding-bottom:.6cqw;margin-bottom:.45cqw}
+  .aux-head::after{content:"";position:absolute;left:0;bottom:0;width:2.6cqw;height:2px;background:var(--cinnabar);opacity:.55}
+  .aux-gloss{display:flex;align-items:baseline;gap:.35cqw;font-size:var(--aux-gloss-size,1.2cqw);color:var(--ink2)}
+  .aux-gloss b{color:var(--cinnabar);font-size:1.55cqw;font-weight:600;line-height:1}
+  .aux-gloss small{font-size:.95cqw;color:var(--ink2);opacity:.75}
+  .aux-gloss .m{margin-left:.15cqw}
+  .aux-pt{font-size:var(--aux-pt-size,1.3cqw);color:var(--ink2);line-height:1.45;padding-left:1.3cqw;position:relative}
+  .aux-pt::before{content:"";position:absolute;left:0;top:.55em;width:.5cqw;height:.5cqw;border-radius:50%;background:var(--cinnabar);opacity:.6}
+
+  /* 模板 T2 标题+引 / T4 一句话大字（无经文，铺满卷轴精准空间）：
+       整块在卷轴里【上下居中】，文字靠【左】对齐、不居中 */
+  .tpl-center{position:absolute;left:var(--board-left,40%);width:var(--board-w,49.5%);top:var(--board-top,46%);height:var(--board-h,38%);
+    display:flex;flex-direction:column;
+    align-items:flex-start;justify-content:center;gap:.7cqw;text-align:left;padding:0 6%;opacity:0;transition:opacity .5s ease}
+  .tpl-center.show{opacity:1}
+  .center-title-slot,.center-lead-slot{width:100%;display:flex;flex-direction:column;align-items:flex-start}
+  .center-title-slot{gap:0}
+  .center-lead-slot{gap:.55cqw}
+  .c-title{font-family:"Songti SC",serif;font-size:var(--c-title-size,2.9cqw);color:var(--cinnabar);letter-spacing:.08em;font-weight:600;
+    position:relative;padding-bottom:.7cqw;margin-bottom:.5cqw;opacity:0;transform:translateY(6px);transition:.5s ease var(--d,0s)}
+  .c-title.in{opacity:1;transform:none}
+  .c-title::after{content:"";position:absolute;left:0;width:3.4cqw;bottom:0;height:1.5px;background:var(--cinnabar);opacity:.5}
+  .c-lead{font-family:"Songti SC",serif;font-size:var(--c-lead-size,1.6cqw);color:var(--ink2);line-height:1.55;
+    opacity:0;transform:translateY(6px);transition:.5s ease var(--d,0s)}
+  .c-lead.in{opacity:1;transform:none}
+  .c-big{font-family:"Songti SC",serif;font-size:var(--big-size,2.7cqw);color:var(--ink);line-height:1.7;letter-spacing:.04em;
+    opacity:0;transform:translateY(8px);transition:.6s ease var(--d,0s)}
+  .c-big.in{opacity:1;transform:none}
+  .c-big em{font-style:normal;color:var(--cinnabar)}
+
+  /* 模板 T3 卷轴中央大字：一个短词大字居中铺在卷轴绢帛上，书法体、像泼墨题字。
+       与 T2/T4 共用 #center 容器，但本字【横竖都居中】、字号特大、字体偏行楷/魏碑。 */
+  .c-glyph{align-self:center;text-align:center;font-family:var(--glyph-font,"Weibei SC","STKaiti","Kaiti SC","STSong","Songti SC",serif);
+    font-size:var(--glyph-size,7cqw);line-height:1.05;letter-spacing:.06em;color:var(--ink);
+    opacity:0;transform:scale(.82);transition:.8s cubic-bezier(.2,.75,.3,1) var(--d,0s)}
+  .c-glyph.in{opacity:1;transform:none}
+  .c-glyph em{font-style:normal;color:var(--cinnabar)}
+
+  /* 字幕：逐字取自口播稿，单行自动分段、一条条走 */
+  .subtitle{position:absolute;left:var(--sub-side,8%);right:var(--sub-side,8%);bottom:var(--sub-bottom,3.8%);display:flex;align-items:center;justify-content:center;text-align:center;z-index:7}
+  .subtitle .line{font-size:var(--sub-size,1.7cqw);line-height:1.5;color:#f4eede;white-space:nowrap;opacity:0;transform:translateY(6px);transition:.32s ease;
+    text-shadow:0 2px 10px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9)}
+  .subtitle .line.on{opacity:1;transform:none}
+
+  /* 填区调试框 */
+  .zbox{position:absolute;border:1.5px dashed;opacity:0;transition:.3s;pointer-events:none;border-radius:6px;z-index:8}
+  .zbox span{position:absolute;top:-16px;left:0;font-size:10px;font-family:ui-monospace,Menlo,monospace;padding:1px 5px;border-radius:4px;color:#0a0c0d;white-space:nowrap}
+  .show-zone .zbox{opacity:.9}
+  .z-scroll{inset:0;border-color:var(--cinnabar);border-width:2px} .z-scroll span{background:var(--cinnabar);color:#fff}
+  .z-jing{right:2%;top:10%;width:51%;height:80%;border-color:var(--gold)} .z-jing span{background:var(--gold)}
+  .z-aux{left:3%;top:3%;width:42%;height:94%;border-color:#c98a3a} .z-aux span{background:#c98a3a}
+  .z-sub{left:8%;right:8%;bottom:2.2%;height:9%;border-color:#7fa583} .z-sub span{background:#7fa583}
+
+  .panel{width:min(960px,94vw);display:flex;flex-direction:column;gap:10px;margin-top:2px}
+  .bar{height:4px;border-radius:3px;background:#23282a;overflow:hidden}
+  .bar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--cinnabar),var(--gold))}
+  .ctrls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button{background:#1b2022;color:var(--paper);border:1px solid #2c3335;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+  button:hover{background:#242b2d;border-color:#3a4346}
+  button.primary{background:var(--cinnabar);border-color:var(--cinnabar);color:#fff;font-weight:600}
+  .scene-label{font-size:12px;color:var(--paper-dim);margin-left:auto}
+  .dots{display:flex;gap:6px;flex-wrap:wrap}
+  .dot{flex:1;min-width:0;font-size:10px;color:#6b7376;background:#15191a;border:1px solid #232a2c;border-radius:6px;padding:6px 3px;text-align:center;cursor:pointer;line-height:1.25}
+  .dot.cur{color:var(--paper);border-color:var(--cinnabar);background:#1e1513}
+  .hint{max-width:280px;font-size:12.5px;line-height:1.72;color:#9aa1a3}
+  .hint b{color:var(--paper)} .hint code{color:var(--gold);font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+
+  /* ── 渲染模式（?record=1）：透明叠层，画布锁 1280×720，只留卷轴内容/字幕，
+       隐藏底图·片头视频·背景循环·界面外壳；离屏逐帧截图后在 ffmpeg 里叠到背景视频上 ── */
+  body.rec{background:transparent;padding:0;display:block;gap:0;min-height:0}
+  body.rec .topbar,body.rec .panel,body.rec .hint{display:none}
+  body.rec .wrap{display:block;gap:0}
+  body.rec .stage{width:1280px;height:720px;aspect-ratio:auto;border-radius:0;box-shadow:none;background:none !important}
+  body.rec #intro,body.rec #bgloop{display:none !important}
+  body.rec .zbox{display:none !important}
+
+  /* ── 嵌入模式（?bare=1）：配置台 iframe 用，只留画面、隐藏外壳 ── */
+  body.bare{padding:0;gap:0}
+  body.bare .topbar,body.bare .panel,body.bare .hint{display:none}
+  body.bare .stage{width:100vw;border-radius:0;box-shadow:none}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1 id="title"><b>领读视频</b> · 通用渲染器</h1>
+    <label class="toggle"><span>显示填字区</span><input type="checkbox" id="zoneToggle"><span class="sw"></span></label>
+  </div>
+
+  <div class="wrap">
+    <div>
+      <div class="stage" id="stage">
+        <video class="bg-loop" id="bgloop" muted loop playsinline preload="auto"></video>
+        <video class="intro" id="intro" muted playsinline preload="auto"></video>
+
+        <div class="body-layer" id="body">
+          <div class="scroll-title" id="scrollTitle"></div>
+          <div class="scroll">
+            <div class="jing" id="jing"></div>
+            <div class="aux" id="aux"></div>
+            <div class="zbox z-scroll"><span>卷轴精准空间</span></div>
+            <div class="zbox z-jing"><span>经文区</span></div>
+            <div class="zbox z-aux"><span>辅助区</span></div>
+          </div>
+          <div class="tpl-center" id="center"></div>
+        </div>
+
+        <div class="subtitle"><div class="line" id="sub"><span id="subtxt"></span></div></div>
+        <div class="zbox z-sub"><span>字幕区</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="bar"><div class="fill" id="fill"></div></div>
+        <div class="ctrls">
+          <button class="primary" id="play">▶ 播放</button>
+          <button id="restart">↺ 重头</button>
+          <span class="scene-label" id="slabel">就绪</span>
+        </div>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div>
+
+    <div class="hint" id="hint"></div>
+  </div>
+
+<script src="../dist/renderer/renderer.js"></script>
+</body>
+</html>

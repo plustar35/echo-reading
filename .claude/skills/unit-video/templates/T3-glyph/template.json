@@ -1,0 +1,14 @@
+{
+  "id": "T3",
+  "name": "中央大字",
+  "purpose": "题眼、核心字、卷轴揭开后的视觉锤点。",
+  "base": { "required": ["glyph"], "allowed": ["glyph"] },
+  "stepState": { "allowed": [] },
+  "stepShow": { "allowed": [] },
+  "constraints": { "maxGlyphLines": 2, "maxGlyphCharsPerLine": 4 },
+  "capacity": {
+    "area": "glyph",
+    "basis": "道德经/水墨卷轴当前 --glyph-size=6cqw。",
+    "perBeat": { "maxGlyphLines": 2, "maxGlyphCharsPerLine": 4, "maxWhiteboardItems": 1 }
+  }
+}

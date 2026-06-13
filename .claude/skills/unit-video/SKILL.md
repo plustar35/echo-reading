@@ -1,84 +1,168 @@
 ---
 name: unit-video
 description: >-
-  把一个阅读单元的「备读」做成「领读视频」——作者第一人称、课件式讲解、16:9 横屏。
-  三条线在一根时间轴上对齐合成：画面（书级资产的片头+背景循环）、音频（口播稿 → TTS，主时钟）、
-  文本（字幕=口播稿逐句 + 内容看板按模板呈现讲到的原文与讲解）。从 books/<书>/chNN/NN.md
-  出发，经 口播稿 → 配音 → 分镜 → 渲染 四步，产出该单元的 领读视频.mp4。当用户说
-  「把这章 / 这个单元做成领读视频 / 备读视频 / 讲解视频 / 带读视频」「给《X》第 N 章出个视频 /
-  做个视频」「渲染领读视频」「重渲这一章」，或要把备读内容变成可听可看的视频时，使用本 skill。
+  把一个阅读单元的「备读」做成「领读视频 / 备读视频 / 讲解视频」：
+  作者第一人称、课件式讲解、16:9 横屏。从 books/<书>/chNN/NN.md 出发，
+  经「口播稿 → TTS 时间轴 → 分镜 atoms/steps → 渐进渲染」产出
+  video/<书>/chNN/NN/领读视频.mp4。用户要求把某章、某单元或备读内容做成视频、
+  重渲视频、检查视频流程时，使用本 skill。
 ---
 
-# unit-video — 备读 → 领读视频
+# unit-video — 备读变成领读视频
 
-把晦涩、大段的「备读」变成可听可看、能等价阅读体验的领读视频：作者第一人称、像老师当面带「你」读。一条视频 = 三条线在一根时间轴上对齐——**画面**（素材套：片头 + 背景循环）、**音频**（口播稿 → TTS 配音，主时钟）、**文本**（底部字幕逐句跟口播；内容看板按模板呈现当下讲到的原文与讲解）。具体视觉形态由素材套与模板系统定，skill 本身不绑定任何一本书。
+本 skill 是给 agent 使用的制作协议。它把一个阅读单元的备读内容，转成一条可听可看的「领读视频」：作者 / 主讲人以第一人称对「你」讲，画面像一块动态课堂白板。视频不是把笔记搬上屏幕，而是用配音、字幕、经文高亮和渐进板书，帮助观看者跟上这一段的理解节奏。
 
-记 `SKILL` 为本 skill 目录、`ROOT` 为项目根。skill 自包含：引擎在 `SKILL/scripts/`、规则在 `SKILL/references/`、书级资产在 `SKILL/assets/<书>/`。
+记：
 
-## 不变量
+- `ROOT` = 项目根目录。
+- `SKILL` = `ROOT/.claude/skills/unit-video`。
+- `<unit>` = `books/<书>/chNN/NN.md`。
+- `<out>` = `ROOT/video/<书>/chNN/NN/`。
+- `<assets>` = `SKILL/assets/<书>/<素材id>/`。
 
-1. **配音是主时钟**：整条视频只有一根时间轴 = TTS 音轨（开场引入也在这根轴上）。先配音出真实时间轴，分镜对着它卡，所有视觉事件挂在配音时间戳上。节奏 / 版式问题在分镜里解决；只有内容要改才回改口播稿、重跑配音（时间轴里存有口播稿指纹，忘了重跑会被 align 拦下）。
-2. **备读 `books/<书>/chNN/NN.md` 是事实层源头**，视频是从它派生的呈现层，可随时重生。
-3. **素材套与产物解耦**：一套画面素材 + 它的一份 `配置.js` = 一个**素材套**，统一放 `SKILL/assets/<书名>/<素材id>/`（管线按 `分镜.assets` 解析）。**配置跟素材走、不跟书走**——同一本书换新素材就是新套、重新初始化。每个单元的产物固定落 **`ROOT/video/<书>/chNN/NN/`**（下记 `<out>`，写死、不问用户）。
+## 核心不变量
 
-## 管线 · 一单元一遍
+1. **配音是主时钟**
+   整条视频只有一根时间轴：`口播.tts.m4a`。字幕、经文高亮、板书 reveal、片头后的背景循环，都对齐这根时间轴。口播改了必须重跑 TTS；分镜校验会用指纹拦住「改稿但没重配音」。
 
-| 步 | 做什么 | 谁 | 产出（都在 `<out>`） |
-|---|---|---|---|
-| ⓪ | 查素材套 | — | — |
-| ① | 写口播稿 | LLM 写 → **人审** | `口播稿.md` |
-| ② | 配音 + 时间轴 | 脚本 | `口播.tts.m4a` + `口播时间轴.json` |
-| ③ | 分镜 | 脚本起骨架 → LLM 填 → **人审** | `分镜.js` |
-| ④ | align + 渲染 | 脚本 | `领读视频.mp4` |
+2. **备读文件是事实源头**
+   视频从 `books/<书>/chNN/NN.md` 第 1–7 段提炼。第 8 段「你的理解 / 疑问」和第 9 段「回看批注」不进入视频。视频产物可随时删除重生，不反写备读。
 
-### ⓪ 定素材套
+3. **素材套与单元产物解耦**
+   画面素材与配置放在 `SKILL/assets/<书>/<素材id>/`；单元产物固定放在 `ROOT/video/<书>/chNN/NN/`。分镜通过 `assets:"<书>/<素材id>"` 记录使用哪套素材，旧单元可以按原素材重渲。
 
-素材统一放 **`SKILL/assets/<书名>/<素材id>/`**——一套素材一个 id 文件夹，画面素材和它的 `配置.js` 同住。先定这次用哪套：看 `SKILL/assets/<书名>/` 下的套目录，只有一套 → 直接用；有多套 → 用 AskUserQuestion 问用户选哪套。
+4. **分镜不是字幕复读**
+   字幕已经逐字承载口播；白板内容必须是观看辅助层：关键词、结构提示、概念压缩、判断句。白板文字要比口播短、准、能帮助观看者抓住「这一小段正在讲什么」。
 
-定下后三分支：
+5. **先看整体叙事，再用 atom 绑定时间**
+   `atom` 是脚本生成的全局口播锚点；`beat` 是一页白板，必须用 `take` 引用一段连续 atoms；`step` 是这一页里的语义推进，也用 `take` 引用当前 beat 内的连续 atoms。agent 不手写 `beat.narr`，而是先理解完整口播稿的叙事结构，再拆 beat / step，最后用 atom id 绑定时间。
 
-- **素材 + 配置都在** → 直接走管线。
-- **画面素材（片头/底板/背景循环）没有** → 停下提醒用户先按 `references/资产层与新书.md` 导入素材，别硬往下走。
-- **素材在、`配置.js` 没有** → 走**初始化**：agent 先看底板 / 片头帧预填参数，再 `node SKILL/scripts/init-studio.js <书名>/<素材id>` 起可视化配置台给用户校验微调，保存固化（详见 `资产层与新书.md` 第四节）。一套素材一份配置，初始化一次；换素材 / 换模板 = 新套 = 重新初始化。
+6. **正式制作管线由 agent 全自动执行**
+   基础素材由用户预先准备并导入；新素材套第一次初始化 `配置.js` 时，需要用户在 HTML 配置台 review 和微调。除此之外，单元视频制作管线由 agent 完成：写口播、TTS、生成/完善分镜、静态校验、对齐、渲染成片，中间不设置用户处理节点。
 
-②③ 的脚本会自动解析素材套（单套自动用、多套报错），多套时带 `ASSETS=<书名>/<素材id>` 跑；分镜骨架把它记进 `assets` 字段，④ 渲染按它取材。然后 `mkdir -p <out>`。
+## 架构层次
 
-### ① 口播稿（人审第一关）
-
-从备读提炼一条可念的领读，照 `references/口播稿规范.md` 写 `<out>/口播稿.md`。这是整条管线的基石，写不好后面救不回来。
-
-### ② 配音
-
-```bash
-node SKILL/scripts/gen-tts.js <out>/
+```text
+事实源       books/<书>/chNN/NN.md 第 1–7 段
+单元产物     video/<书>/chNN/NN/：口播稿、TTS、时间轴、分镜、成片
+素材层       SKILL/assets/<书>/<素材id>/：片头、背景循环、底板、配置
+模板层       SKILL/templates/* + src/templates/registry.ts：字段、容量、用途
+协议层       references/分镜与模板.md：atoms / beat / step 的数据契约
+执行层       dist/cli/* + runtime/*：TTS、骨架、校验、布局检查、渲染
 ```
 
-整篇旁白一次送 edge-tts → 音轨 + 句级时间轴，控制台打一张时间轴表。默认嗓 / 语速取自素材套的 `配置.js`；换嗓、调速、离线兜底用环境变量，见脚本头注释。跑前按规范过完文言读音校对。
+核心依赖关系：
 
-### ③ 分镜（人审第二关）
-
-```bash
-node SKILL/scripts/draft-storyboard.js <out>/
+```text
+口播稿 → TTS 时间轴 → atoms
+完整口播叙事 → beats / steps
+模板定义 → 静态字段与容量校验
+素材配置 → 白板几何、字体、T0 时刻
+validate-storyboard → align → layout-check → render-video
 ```
 
-骨架已把 narr 逐字切好、T0 按看板就绪时刻（`scrollReadyMs`）预分、骑线句在子句标点处切开。接着照 `references/分镜与模板.md` 填模板与看板内容。人审看：看板上的原文有没有切错、强调位置对不对、模板按时间选得顺不顺、看板能不能独立读懂。
+## 一单元管线
 
-### ④ 渲染（~5–6min）
+### 0. 解析素材套
 
-```bash
-bash SKILL/scripts/render-video.sh <out>/分镜.js
+先看 `SKILL/assets/<书>/`：
+
+- 只有一套素材：直接使用。
+- 有多套素材：必须由请求或环境变量 `ASSETS=<书>/<素材id>` 给出确定素材套；未给出时停止并报告缺少素材套前置条件。
+- 没有素材或缺 `片头.mp4 / 背景循环.mp4 / 底板.png`：停止，报告需要先导入基础素材资产；素材准备不属于单元制作管线。
+- 有素材但没有 `配置.js`：按 `references/资产层与新书.md` 启动配置台初始化。这是唯一需要用户 review 和微调的环节；完成后再进入单元制作。
+
+### 1. 写口播稿
+
+从 `<unit>` 的备读第 1–7 段提炼，写：
+
+```text
+<out>/口播稿.md
 ```
 
-自动先跑 align（回填 durs + 硬校验：narr 字符流契约、T0 不越看板就绪线、schema 与引用完整性、口播稿指纹——不过即中止），再查素材套、CDP 虚拟时间逐帧渲透明叠层、叠到背景视频、挂口播音轨 → `领读视频.mp4`（1280×720 · 24fps · h264+aac）。
+要求见 `references/口播稿规范.md`。口播稿只写要讲出口的话，不写画面指令、模板、秒数或 reveal 标记。
 
-- 只校验不渲染：`node SKILL/scripts/align-durs.js <out>/分镜.js`
-- 浏览器预览：打开 `SKILL/scripts/renderer.html?data=<分镜.js 相对 scripts 的路径>`；`&beat=N` 跳某镜静帧、`&zone=1` 看看板分区。
+### 2. 配音并生成时间轴
 
-## 运行依赖
+```bash
+node SKILL/dist/cli/gen-tts.js <out>/
+```
 
-`node`（≥21，内置 WebSocket）· Google Chrome（`/Applications/Google Chrome.app`）· `ffmpeg` · Python 的 `edge-tts`（`pip install edge-tts`，在线免费免 key；离线兜底 `ENGINE=say`）。
+默认嗓音、语速和看板时刻来自素材套 `配置.js`，必要时用环境变量覆盖：
 
-## 边界（刻意不做）
+```bash
+VOICE=zh-CN-YunxiNeural RATE=-10% node SKILL/dist/cli/gen-tts.js <out>/
+ENGINE=say node SKILL/dist/cli/gen-tts.js <out>/   # 离线兜底，时间轴降级为段级
+```
 
-- 字幕 / 点亮按句级走，不做逐字对齐（中文 edge-tts 只到句级，已够好）。
-- 成片带可灵水印（资产层自带），原型阶段保留、不去除。
+### 3. 生成分镜骨架
+
+```bash
+node SKILL/dist/cli/draft-storyboard.js <out>/
+```
+
+脚本只产出新版 `分镜.js` 骨架：顶层 `atoms[]` + 粗 `beats[]`。它不决定最终叙事结构。接下来 agent 必须先理解完整口播稿，再照 `references/分镜与模板.md` 和对应 `templates/<模板>/README.md` 完成：
+
+- 选定每个 beat 的模板。模板必须已在 `src/templates/registry.ts` 注册。
+- 从原文拆 `jing`。
+- 填 `base`：该模板开场即存在的对象，如经文句、标题、核心字。
+- 重拆 `beats[].take`：一个 beat 是一页白板，覆盖一个完整小意思。
+- 重拆 `steps[].take`：一个 step 是一页内的语义推进，不按句子或 atom 机械切。
+- 按模板需要给 step 填摘要性板书和高亮：`state` + `show`；T0/T3 这类无 reveal 模板只覆盖 atoms。
+- 保证每个模板的 `capacity` 不超限；超限就拆下一个 beat。
+
+### 4. 静态校验、对齐、布局检查
+
+```bash
+node SKILL/dist/cli/validate-storyboard.js <out>/分镜.js
+node SKILL/dist/cli/align-durs.js <out>/分镜.js
+node SKILL/dist/cli/layout-check.js <out>/分镜.js
+```
+
+`validate-storyboard.js` 负责 atoms/take、模板字段、jing/hi、capacity 等硬校验；`align-durs.js` 只在校验通过后回填 `durs[] / stepDurs[]`；`layout-check.js` 负责真实 DOM 溢出检查。失败时按错误修分镜，不绕过。
+
+### 5. 渲染成片
+
+```bash
+bash SKILL/runtime/render-video.sh <out>/分镜.js
+```
+
+`render-video.sh` 会先跑 `validate-templates`、`validate-storyboard`、align 和 layout-check，通过后输出 `<out>/领读视频.mp4`。
+
+浏览器预览：
+
+```text
+SKILL/runtime/renderer.html?data=<分镜.js 相对 runtime 的路径>
+```
+
+常用参数：
+
+- `&beat=N`：跳到第 N 个 beat 的静帧。
+- `&step=N`：配合 `&beat=N` 跳到该 beat 的第 N 个 step 静帧。
+- `&zone=1`：显示看板分区。
+- `&auto=1`：打开后自动播放。
+
+## 依赖
+
+- Node.js ≥ 21。
+- Google Chrome：`/Applications/Google Chrome.app`。
+- `ffmpeg` / `ffprobe`。
+- Python 包 `edge-tts`：`pip install edge-tts`。
+- 离线兜底可用 macOS `say`，但时间轴只能到段级。
+
+## 常见判断
+
+- **白板抢跑**：不要把还没讲到的信息放在 `base` 或当前 step；按语义推进拆 step。
+- **白板溢出**：不要继续加 step；拆成下一个 beat，让白板重新开始。
+- **白板复述口播**：删掉近似原句，改成关键词、概念压缩、结构提示。
+- **想精准卡点**：不要写秒数；调整 `beat.take` / `step.take` 的 atom 边界，让 align 从 TTS 时间轴推导。
+- **分镜校验失败**：先看 `validate-storyboard` 的第一条错误。通常是改了 atom 文本、take 不连续、模板字段不合法、capacity 超限、hi key 不存在、T0 越线。
+- **layout-check 失败**：说明真实 DOM 已溢出；压缩板书或拆 beat，不要调秒数绕过。
+- **想改讲法**：回到 `口播稿.md`，重跑 TTS，再重跑 draft/调整分镜。不要只改 `atoms[].narr`。
+
+## 不做的事
+
+- 不做逐字 TTS 对齐；中文 edge-tts 当前主要是句级，step 内部用字符比例插值。
+- 不在口播稿里写视觉 marker，避免污染旁白。
+- 不为单章临时新增模板；优先用 `T0–T4` 和 step 编排解决节奏。
+- 不去除素材自带水印。

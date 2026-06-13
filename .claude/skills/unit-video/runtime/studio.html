@@ -208,7 +208,7 @@ $("#markIntro").onclick=()=>{const d=$("#introVid").duration;if(d)cfg.introVideo
 function loadTpl(i){
   curTpl=i;
   [...$("#tplBtns").children].forEach((b,k)=>b.classList.toggle("on",k===i));
-  $("#pv").src=`/scripts/renderer.html?data=studio-sample.js&beat=${TPLS[i].beat}&bare=1`;
+  $("#pv").src=`/runtime/renderer.html?data=studio-sample.js&beat=${TPLS[i].beat}&bare=1`;
   const box=$("#varCtrls");box.innerHTML="";
   for(const[k,label,dft]of TPLS[i].vars){
     const row=document.createElement("div");row.className="frow";

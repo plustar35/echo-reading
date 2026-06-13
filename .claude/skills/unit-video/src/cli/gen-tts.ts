@@ -8,9 +8,9 @@
  *                       cues[] = 最细可得单元(edge=句级 / say=空)，名字叫 cues 不叫 words：中文只到句级。
  * 不再回写 durs（那是后续 align 步骤的事）。
  *
- * 用法： node scripts/gen-tts.js <口播稿.md 路径 或 章节目录>
- *        node scripts/gen-tts.js <书>/chNN                   # 给目录 → 自动找其中的 口播稿.md
- *        VOICE=zh-CN-YunxiNeural node scripts/gen-tts.js ...  # 换嗓
+ * 用法： node dist/cli/gen-tts.js <口播稿.md 路径 或 章节目录>
+ *        node dist/cli/gen-tts.js <书>/chNN                   # 给目录 → 自动找其中的 口播稿.md
+ *        VOICE=zh-CN-YunxiNeural node dist/cli/gen-tts.js ...  # 换嗓
  *        RATE=-12% node ...                                   # 放慢
  *        ENGINE=say VOICE="Grandpa (Chinese (China mainland))" node ...  # 离线兜底（降级段级）
  *        SCROLL_READY_MS=6200 node ...                        # 卷轴铺好时刻(默认 6200)
@@ -24,11 +24,11 @@
  *   - say 引擎：拿不到边界 → 降级【段级】，每个旁白段单独合成量时长。granularity="block"。
  */
 const fs=require("fs"), cp=require("child_process"), path=require("path");
-const {parseScript,clean,hashNarr}=require("./parse-script.js");
+const {parseScript,clean,hashNarr}=require("../core/parse-script");
 
 // ── 入参：口播稿.md 路径 或 章节目录 ───────────────────────────────────────
 const IN=process.argv[2];
-if(!IN){console.error("用法: node scripts/gen-tts.js <口播稿.md 路径 或 章节目录>");process.exit(1);}
+if(!IN){console.error("用法: node dist/cli/gen-tts.js <口播稿.md 路径 或 章节目录>");process.exit(1);}
 let SCRIPT_ABS=path.resolve(IN);
 if(fs.existsSync(SCRIPT_ABS)&&fs.statSync(SCRIPT_ABS).isDirectory()){
   SCRIPT_ABS=path.join(SCRIPT_ABS,"口播稿.md");
@@ -38,11 +38,11 @@ const OUT_DIR=path.dirname(SCRIPT_ABS);
 const AUDIO_OUT=path.join(OUT_DIR,"口播.tts.m4a");
 const TIMELINE_OUT=path.join(OUT_DIR,"口播时间轴.json");
 
-// 素材套配置：默认嗓 / 语速 / 看板时刻的单一来源（见 resolve-assets.js——env ASSETS 优先，
-// 没给则按书名自动解析：恰好一套用它、多套报错让 agent 先问用户）。env VOICE/RATE 永远最优先。
-let BOOK_CFG={};
+// 素材套配置：默认嗓 / 语速 / 看板时刻的单一来源（见 core/assets——env ASSETS 优先，
+// 没给则按书名自动解析：恰好一套用它，多套要求显式指定 ASSETS）。env VOICE/RATE 永远最优先。
+let BOOK_CFG:any={};
 {
-  const {resolveAssetId,loadAssetConfig}=require("./resolve-assets.js");
+  const {resolveAssetId,loadAssetConfig}=require("../core/assets");
   const m=SCRIPT_ABS.match(/\/video\/([^/]+)\//);
   try{ BOOK_CFG=loadAssetConfig(resolveAssetId(m&&m[1])); }
   catch(e){ console.error("✗ "+e.message); process.exit(1); }
@@ -247,3 +247,5 @@ if(scrollBlk>=0){
   const after=blockTimes.find(b=>b.startMs>=SCROLL_READY_MS);
   console.log(`★ scrollReadyMs(${sr}s) 落在段与段之间${after?`，下一段是第 ${after.idx} 段（${(after.startMs/1000).toFixed(2)}s 起）`:""}`);
 }
+
+export {};

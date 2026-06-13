@@ -1,0 +1,23 @@
+{
+  "id": "T1",
+  "name": "原文 + 渐进注释",
+  "purpose": "逐句精讲。右侧经文先出现，highlight 与左侧注释按 step 推进。",
+  "base": { "required": ["sent"], "allowed": ["sent", "hi", "aux"] },
+  "stepState": { "allowed": ["sent", "hi"] },
+  "stepShow": { "allowed": ["aux"] },
+  "constraints": { "maxAuxItemsPerStep": 2, "maxTextChars": 22 },
+  "capacity": {
+    "area": "aux",
+    "basis": "道德经/水墨卷轴 1280x720；board=48.5%x37%；aux=42%x94%；当前 --jing-size=2cqw。",
+    "perStep": { "maxNewAuxItems": 2, "maxTextChars": 22, "maxVisualLines": 2 },
+    "perBeat": {
+      "maxSteps": 3,
+      "maxAuxItems": 6,
+      "maxHeadItems": 1,
+      "maxGlossItems": 2,
+      "maxPointItems": 3,
+      "maxTextChars": 64,
+      "maxVisualLines": 6
+    }
+  }
+}

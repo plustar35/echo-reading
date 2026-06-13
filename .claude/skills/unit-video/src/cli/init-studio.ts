@@ -2,11 +2,11 @@
 /* 素材套初始化 · 可视化配置台（server）
  *
  * 起一个本地配置台：在真实底板上拖拽看板框/字幕带/章名位、滚片头视频标 scrollReadyMs、
- * 调配色与模板字体字号——预览用成片同一个 renderer.html（所见即所得），保存写回
+ * 调配色与模板字体字号——预览用成片同一个 runtime/renderer.html（所见即所得），保存写回
  * SKILL/assets/<素材id>/配置.js（旧文件备份 .bak）。一套素材一份配置、初始化一次；
  * 换新素材 = 新素材套目录 = 重新初始化。
  *
- * 用法： node scripts/init-studio.js <素材id> [端口]   # 默认 8765，打开 http://localhost:8765
+ * 用法： node dist/cli/init-studio.js <素材id> [端口]   # 默认 8765，打开 http://localhost:8765
  * 前置： SKILL/assets/<素材id>/ 已有 底板.png + 片头.mp4（配置.js 可以还没有，保存时生成）
  */
 "use strict";
@@ -16,10 +16,11 @@ const path = require("path");
 
 const BOOK = process.argv[2];                  // 素材套（SKILL/assets/ 下相对路径，如 道德经/水墨卷轴）
 const PORT = +(process.argv[3] || 8765);
-if (!BOOK) { console.error("用法: node scripts/init-studio.js <书名>/<素材id> [端口]"); process.exit(1); }
+if (!BOOK) { console.error("用法: node dist/cli/init-studio.js <书名>/<素材id> [端口]"); process.exit(1); }
 
-const SCRIPTS = __dirname;
-const ASSETS = path.join(SCRIPTS, "..", "assets", BOOK);
+const SKILL_ROOT = path.resolve(__dirname, "..", "..");
+const RUNTIME = path.join(SKILL_ROOT, "runtime");
+const ASSETS = path.join(SKILL_ROOT, "assets", BOOK);
 const CFG_PATH = path.join(ASSETS, "配置.js");
 if (!fs.existsSync(path.join(ASSETS, "底板.png"))) {
   console.error(`✗ ${path.relative(process.cwd(), ASSETS)}/底板.png 不存在——先把画面素材放进去（见 references/资产层与新书.md）`);
@@ -56,7 +57,7 @@ function configToJs(c) {
   const j = o => JSON.stringify(o);
   return `/* 素材套「${BOOK}」的配置 —— 一套素材一份配置，描述这套画面素材的参数，单一来源。
  * gen-tts（默认嗓 / 看板时刻）、align-durs（T0 校验线）、renderer（几何 / 配色 / 淡出）都读这里。
- * 可视化修改：node SKILL/scripts/init-studio.js ${BOOK}
+ * 可视化修改：node SKILL/dist/cli/init-studio.js ${BOOK}
  * 字段：scrollReadyMs=片头里看板就绪时刻(ms,T0 截止线)；introVideoMs=片头时长(ms,预览淡出用)；
  *       board/titlePos/subtitle=几何(% of 16:9)；palette=配色；tplVars=模板字体字号微调(CSS 变量)。 */
 const BOOK_CONFIG = {
@@ -81,17 +82,24 @@ function sampleStoryboard() {
 audio:"无音轨.m4a",
 jing:[{id:"s1",parts:[{k:"a",t:"示例原文短语"},{p:"，"},{k:"b",t:"再来一段短语"},{p:"。"}]}],
 beats:[
- {seg:"T0",tpl:"T0",narr:"开场字幕样例，浮在片头画面上，看板就绪前只有这一行。"},
- {seg:"T3",tpl:"T3",glyph:"字",narr:"中央大字样例。"},
- {seg:"T2",tpl:"T2",title:"标题样例",lead:["引句样例一，铺垫一句。","引句样例二。"],narr:"标题加引样例。"},
- {seg:"T1",tpl:"T1",sent:"s1",hi:["a"],aux:{head:"看板标题样例",gloss:[{z:"字",p:"zì",m:"释义样例"}],points:["要点是完整短句的样例","第二条要点样例"]},narr:"逐句精讲样例，右侧点亮原文短语。"},
- {seg:"T4",tpl:"T4",big:"一句话大字样例，<br><em>朱砂强调半句</em>。",narr:"收束样例。"}],
-durs:[4000,4000,4000,4000,4000]};
+ {seg:"T0",tpl:"T0",narr:"开场字幕样例，浮在片头画面上，看板就绪前只有这一行。",
+  atoms:[{id:"a1",narr:"开场字幕样例，浮在片头画面上，看板就绪前只有这一行。"}],steps:[{take:["a1"]}]},
+ {seg:"T3",tpl:"T3",narr:"中央大字样例。",
+  base:{glyph:"字"},atoms:[{id:"a1",narr:"中央大字样例。"}],steps:[{take:["a1"]}]},
+ {seg:"T2",tpl:"T2",narr:"标题加引样例。",
+  base:{title:"标题样例"},atoms:[{id:"a1",narr:"标题加引样例。"}],steps:[{take:["a1"],show:{center:[{kind:"lead",text:"引句样例，随口播出现。"}]}}]},
+ {seg:"T1",tpl:"T1",narr:"逐句精讲样例，右侧点亮原文短语。",
+  base:{sent:"s1"},atoms:[{id:"a1",narr:"逐句精讲样例，"},{id:"a2",narr:"右侧点亮原文短语。"}],
+  steps:[{take:["a1"],state:{hi:["a"]},show:{aux:[{kind:"head",text:"看板标题"},{kind:"gloss",z:"字",p:"zì",m:"释义样例"}]}},
+         {take:["a2"],state:{hi:["b"]},show:{aux:[{kind:"point",text:"要点随讲随显"}]}}]},
+ {seg:"T4",tpl:"T4",narr:"收束样例。",
+  base:{},atoms:[{id:"a1",narr:"收束样例。"}],steps:[{take:["a1"],show:{center:[{kind:"big",text:"一句话大字样例，<br><em>朱砂强调半句</em>。"}]}}]}],
+durs:[4000,4000,4000,4000,4000],stepDurs:[[4000],[4000],[4000],[2000,2000],[4000]]};
 if(typeof window!=="undefined")window.STORYBOARD=STORYBOARD;
 if(typeof module!=="undefined")module.exports=STORYBOARD;`;
 }
 
-function send(res, code, body, type) {
+function send(res, code, body, type?) {
   res.writeHead(code, { "Content-Type": type || "text/plain; charset=utf-8" });
   res.end(body);
 }
@@ -118,8 +126,8 @@ const server = http.createServer((req, res) => {
   const p = decodeURIComponent(u.pathname);
 
   if (p === "/" || p === "/studio.html")
-    return serveFile(req, res, path.join(SCRIPTS, "studio.html"));
-  if (p === "/scripts/studio-sample.js")
+    return serveFile(req, res, path.join(RUNTIME, "studio.html"));
+  if (p === "/runtime/studio-sample.js")
     return send(res, 200, sampleStoryboard(), MIME[".js"]);
   if (p === "/api/meta")
     return send(res, 200, JSON.stringify({ book: BOOK }), MIME[".json"]);
@@ -139,10 +147,12 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
-  if (p.startsWith("/scripts/"))               // renderer.html 等引擎文件
-    return serveFile(req, res, path.join(SCRIPTS, p.slice("/scripts/".length)));
+  if (p.startsWith("/runtime/"))               // renderer.html 等运行壳
+    return serveFile(req, res, path.join(RUNTIME, p.slice("/runtime/".length)));
+  if (p.startsWith("/dist/"))                  // 编译后的 renderer 脚本
+    return serveFile(req, res, path.join(SKILL_ROOT, "dist", p.slice("/dist/".length)));
   if (p.startsWith("/assets/"))                // 书级资产（底板/片头/配置…）
-    return serveFile(req, res, path.join(SCRIPTS, "..", "assets", p.slice("/assets/".length)));
+    return serveFile(req, res, path.join(SKILL_ROOT, "assets", p.slice("/assets/".length)));
   send(res, 404, "not found");
 });
 
@@ -150,3 +160,5 @@ server.listen(PORT, () => {
   console.log(`《${BOOK}》配置台 → http://localhost:${PORT}`);
   console.log(`  资产目录 ${path.relative(process.cwd(), ASSETS)} · 保存写回 配置.js（旧文件备份 .bak）· Ctrl-C 退出`);
 });
+
+export {};

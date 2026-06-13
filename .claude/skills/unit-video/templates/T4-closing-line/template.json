@@ -1,0 +1,15 @@
+{
+  "id": "T4",
+  "name": "收束一句话",
+  "purpose": "收束、反问、金句。按分句或关键词渐进出现。",
+  "base": { "allowed": ["big"] },
+  "stepState": { "allowed": [] },
+  "stepShow": { "allowed": ["center", "big"] },
+  "constraints": { "maxCenterItemsPerStep": 1, "maxTextChars": 24 },
+  "capacity": {
+    "area": "center",
+    "basis": "道德经/水墨卷轴 1280x720；big 文本使用完整 board，适合一句收束。",
+    "perStep": { "maxNewBigItems": 1, "maxTextChars": 32, "maxVisualLines": 3 },
+    "perBeat": { "maxSteps": 1, "maxBigItems": 1, "maxTextChars": 36, "maxVisualLines": 3 }
+  }
+}
