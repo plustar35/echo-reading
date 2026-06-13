@@ -1,45 +1,52 @@
 # 一次性切分脚本范例
 
-这里是两个**真实验证过**的一次性切分脚本,对应两种最常见的结构。
-它们是**起点不是模板**——每本书先 `inspect_book.py` 看清结构,再照着最接近的那个改。
-切分脚本唯一的产出:一个 `[{"title","body"}, ...]` 的 JSON,打到 stdout,
-管道喂给 `write_chapters.py`。解包和写骨架都不在切分脚本里。
+这里的脚本是起点,不是通用模板。每本书都先跑 `inspect_book.py`,再按结构改出这本书专用脚本。
+切分脚本唯一产出是 `[{"title","body"}, ...]` JSON,写到 stdout。
 
-公共开头(让一次性脚本能 import 归一化层):
+公共开头:
 
 ```python
-import sys, re, json
-sys.path.insert(0, "<skill>/scripts")   # 换成本 skill 的 scripts 绝对路径
-from ebook_lib import load, plain
+import sys, re, json, os
+sys.path.insert(0, "<skill>/scripts")
+from source_lib import load, plain, source_text
 ```
+
+生成后必须跑:
+
+```bash
+python3 /tmp/split_this_book.py > /tmp/chapters.json
+python3 <skill>/scripts/verify_chapters.py /path/to/book --chapters /tmp/chapters.json
+```
+
+校验不通过就修正切分脚本或登记声明性排除项后重跑。
 
 ---
 
-## 范例 A:单文档 + 正文规律文本标记 → 正则切(道德经 epub)
+## 范例 A:单文档 + 正文规律标记
 
-结构特征:`inspect_book.py` 显示 **spine 文档 = 1**、**TOC 无锚点/无用**、
-正文里某个 pattern 命中 N 行(如 `^第\S{1,8}章` 命中 81 行)。
-注意 `\S` 同时吃中文数字和阿拉伯数字——道德经第 55 章正文写成「第55章」,
-纯 `[一-龥]` 的正则会漏掉它。
+适用:epub/mobi/Markdown/PDF 抽出的全文里有稳定章节行,如 `第一章`、`第55章`。
 
 ```python
 import sys, re, json
 sys.path.insert(0, "<skill>/scripts")
-from ebook_lib import load, plain
+from source_lib import load, plain
 
 _, docs, _ = load("/path/to/book.epub")
-lines = plain(docs[0][1])
+lines = []
+for _, doc in docs:
+    lines.extend(plain(doc))
 
-HEAD = re.compile(r'^第\S{1,8}章')          # ← 用 inspect 报告里命中的那个 pattern
+HEAD = re.compile(r"^第\S{1,8}章")
 chapters, title, body = [], None, []
 for ln in lines:
     if HEAD.match(ln):
         if title is not None:
             chapters.append({"title": title, "body": "\n\n".join(body).strip()})
-        title = re.sub(r'[：:\s]+$', '', ln)  # 去掉标题行尾的「：」
+        title = re.sub(r"[：:\s]+$", "", ln)
         body = []
     elif title is not None:
         body.append(ln)
+
 if title is not None:
     chapters.append({"title": title, "body": "\n\n".join(body).strip()})
 
@@ -48,18 +55,14 @@ print(json.dumps(chapters, ensure_ascii=False))
 
 ---
 
-## 范例 B:单文档 + TOC 带锚点 → 按锚点位置切(金刚经 mobi)
+## 范例 B:单文档 + TOC 带锚点
 
-结构特征:`inspect_book.py` 显示 **spine 文档 = 1**、**TOC 多数条目带 `#锚点`**。
-做法:在 HTML 里定位每个锚点 `<a id="锚点"/>` 的位置,相邻两个之间就是一章。
-
-**踩过的坑**:必须从 `<a` 标签的**起始 `<`** 切、从标签**结束 `>`** 之后取正文。
-若从 `id="..."` 属性中间切,半个标签会漏成正文(出现 `id="filepos37130" />`)。
+适用:单 HTML 文档,TOC 多数条目带 `#锚点`。必须从标签结束后取正文,避免半个 HTML 标签漏进正文。
 
 ```python
 import sys, re, json
 sys.path.insert(0, "<skill>/scripts")
-from ebook_lib import load, plain
+from source_lib import load, plain
 
 _, docs, toc = load("/path/to/book.mobi")
 html = docs[0][1]
@@ -76,9 +79,9 @@ pts.sort()
 chapters = []
 for i, (start, tagend, label) in enumerate(pts):
     end = pts[i + 1][0] if i + 1 < len(pts) else len(html)
-    lines = plain(html[tagend:end])              # 从标签结束之后取正文
+    lines = plain(html[tagend:end])
     if lines and lines[0].strip().strip("《》") in label:
-        lines = lines[1:]                        # 丢掉与标题重复的首行
+        lines = lines[1:]
     chapters.append({"title": label, "body": "\n\n".join(lines).strip()})
 
 print(json.dumps(chapters, ensure_ascii=False))
@@ -86,15 +89,14 @@ print(json.dumps(chapters, ensure_ascii=False))
 
 ---
 
-## 范例 C:多文档(一文档一章)→ 按 spine 顺序切
+## 范例 C:多文档 epub/mobi
 
-结构特征:`inspect_book.py` 显示 **spine 文档 > 1**(规范 epub 常见,一章一 xhtml)。
-做法:每个文档就是一章;标题优先从 TOC 里取(TOC 的 doc 字段对上文档名)。
+适用:规范 epub 常见,spine 多文档且基本一章一个 xhtml。
 
 ```python
 import sys, json, os
 sys.path.insert(0, "<skill>/scripts")
-from ebook_lib import load, plain
+from source_lib import load, plain
 
 _, docs, toc = load("/path/to/book.epub")
 doc2title = {}
@@ -112,8 +114,114 @@ print(json.dumps(chapters, ensure_ascii=False))
 
 ---
 
+## 范例 D:Markdown 按标题层级切
+
+适用:H1 是书名,H2 是章。若 H1 也是章,把 `LEVEL = 1`。
+
+```python
+import sys, re, json
+sys.path.insert(0, "<skill>/scripts")
+from source_lib import source_text
+
+text = source_text("/path/to/book.md")
+LEVEL = 2
+HEAD = re.compile(r"^#{%d}\s+(.+?)\s*$" % LEVEL)
+
+chapters, title, body = [], None, []
+for ln in text.splitlines():
+    m = HEAD.match(ln)
+    if m:
+        if title is not None:
+            chapters.append({"title": title, "body": "\n".join(body).strip()})
+        title = m.group(1).strip()
+        body = []
+    elif title is not None:
+        body.append(ln)
+
+if title is not None:
+    chapters.append({"title": title, "body": "\n".join(body).strip()})
+
+print(json.dumps(chapters, ensure_ascii=False))
+```
+
+---
+
+## 范例 E:文字型 PDF 按章节标记切
+
+适用:PDF 已由 `inspect_book.py` 判定为文字型,没有可靠 TOC/书签,正文里有稳定章节标题。
+
+```python
+import sys, re, json
+sys.path.insert(0, "<skill>/scripts")
+from source_lib import source_text
+
+text = source_text("/path/to/book.pdf")
+
+# PDF 常见噪声:单独页码。不要过度清洗,清洗后必须 verify。
+lines = []
+for ln in text.splitlines():
+    s = ln.strip()
+    if re.fullmatch(r"\d{1,4}", s):
+        continue
+    lines.append(s)
+
+HEAD = re.compile(r"^第\S{1,8}章")
+chapters, title, body = [], None, []
+for ln in lines:
+    if HEAD.match(ln):
+        if title is not None:
+            chapters.append({"title": title, "body": "\n\n".join(body).strip()})
+        title = ln
+        body = []
+    elif title is not None:
+        body.append(ln)
+
+if title is not None:
+    chapters.append({"title": title, "body": "\n\n".join(body).strip()})
+
+print(json.dumps(chapters, ensure_ascii=False))
+```
+
+---
+
+## 范例 F:文字型 PDF 按 TOC/书签页码切
+
+适用:PDF 已由 `inspect_book.py` 判定为文字型,TOC/书签有稳定页码范围。先用 TOC 标题和页码切,
+再抽查每章开头是否落在正确正文页。PDF 页码和正文印刷页码可能不同,以 `inspect_book.py` 报告的
+`page-00NN` 为准。
+
+```python
+import sys, json
+sys.path.insert(0, "<skill>/scripts")
+from source_lib import load, pdf_page_texts
+
+_, docs, toc = load("/path/to/book.pdf")
+page2text = pdf_page_texts("/path/to/book.pdf")
+
+# 从 inspect 报告里选择深读主体的 TOC 条目,不要机械包含版权页/目录页/广告页。
+selected = [
+    ("第一章", "page-0012"),
+    ("第二章", "page-0041"),
+    ("第三章", "page-0055"),
+]
+
+chapters = []
+for i, (title, start_page) in enumerate(selected):
+    end_page = selected[i + 1][1] if i + 1 < len(selected) else None
+    start = int(start_page.split("-")[1])
+    end = int(end_page.split("-")[1]) if end_page else len(docs) + 1
+    body = []
+    for page_no in range(start, end):
+        body.append(page2text.get(page_no, ""))
+    chapters.append({"title": title, "body": "\n\n".join(body).strip()})
+
+print(json.dumps(chapters, ensure_ascii=False))
+```
+
+---
+
 ## 都不干净怎么办
 
-- 标记不规律、TOC 缺失、正文混了页眉页脚 → 别硬套上面三种。
-- 可以先 `plain()` 出全文,人工(你+用户)定几个章节边界的特征行,按特征切。
-- 实在不行,把 inspect 报告端给用户,一起决定单元怎么分——切分单元是内容判断,不只是机械活。
+- 标记不规律、TOC 缺失、正文混了页眉页脚:agent 可以人工列章节边界或混合策略。
+- 文件里有多个版本/译本/附录且无法判断用户要读哪部分:先问用户。
+- 版权页、目录页、广告页、译者说明等不作为深读正文时,不要在脚本里偷偷丢掉;在 `verify_chapters.py` 命令里登记声明性排除项。

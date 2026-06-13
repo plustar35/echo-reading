@@ -36,7 +36,7 @@ def main():
     ap.add_argument("--base", default="", help="底本说明,写进 progress.md")
     ap.add_argument("--source", default="", help="来源文件名,写进 progress.md")
     ap.add_argument("--save-source", dest="save_source", default="",
-                    help="把这个源文件(epub/mobi,或下载到临时目录的文件)拷进 books/<书名>/ 留档")
+                    help="把这个源文件(epub/mobi/md/pdf 等,或下载到临时目录的文件)拷进 books/<书名>/ 留档")
     ap.add_argument("--in", dest="infile", default="", help="章节 JSON 文件;省略则读 stdin")
     ap.add_argument("--force", action="store_true", help="覆盖已存在的 chNN/raw.md")
     args = ap.parse_args()
@@ -74,7 +74,9 @@ def main():
     for i, ch in enumerate(chapters, 1):
         cid = f"ch{i:0{pad}d}"
         title = (ch.get("title") or cid).strip()
-        body = (ch.get("body") or "").strip() or "<原文提取为空,请检查切分脚本>"
+        body = (ch.get("body") or "").strip()
+        if not body:
+            sys.exit(f"{cid}「{title}」正文为空,请修正切分脚本;不得写入占位原文")
         # H1:title 已自带书名(含《》)时直接用,否则补「《书名》」前缀,避免书名翻倍
         heading = title if "《" in title else f"《{args.book}》{title}"
         chdir = os.path.join(bookdir, cid)
