@@ -1,7 +1,8 @@
 # 一次性切分脚本范例
 
 这里的脚本是起点,不是通用模板。每本书都先跑 `inspect_book.py`,再按结构改出这本书专用脚本。
-切分脚本唯一产出是 `[{"title","body"}, ...]` JSON,写到 stdout。
+切分脚本唯一产出是 `[{"title","body"}, ...]` JSON,写到 stdout。一次性脚本和中间产物放在
+`SKILL.md` 规定的 `$WORK` 临时目录里,不要放进 `SKILL/scripts/`。
 
 公共开头:
 
@@ -14,11 +15,12 @@ from source_lib import load, plain, source_text
 生成后必须跑:
 
 ```bash
-python3 /tmp/split_this_book.py > /tmp/chapters.json
-python3 <skill>/scripts/verify_chapters.py /path/to/book --chapters /tmp/chapters.json
+python3 "$WORK/split_this_book.py" > "$WORK/chapters.json"
+python3 <skill>/scripts/verify_chapters.py /path/to/book --chapters "$WORK/chapters.json"
 ```
 
-校验不通过就修正切分脚本或登记声明性排除项后重跑。
+校验不通过就修正切分脚本或登记声明性排除项后重跑。成功导入并保存源文件后,按 `SKILL.md`
+删除整个 `$WORK`。
 
 ---
 

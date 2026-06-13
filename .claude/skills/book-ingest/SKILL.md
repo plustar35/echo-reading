@@ -58,10 +58,34 @@ pip install EbookLib beautifulsoup4 mobi pypdf
 
 记 `SKILL` 为本 skill 目录,`ROOT` 为 echo-reading 项目根。
 
+### 临时工作目录
+
+每次入库先创建唯一临时目录,一次性脚本和中间产物都放这里,不要放进 `SKILL/scripts/` 或项目根目录:
+
+```bash
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/book-ingest-<书名slug>.XXXXXX")
+```
+
+固定文件名:
+
+- `$WORK/source.<ext>`:下载来的书源文件;用户给本地文件时可不复制,直接记录原路径。
+- `$WORK/inspect.log`:探测报告。
+- `$WORK/split_this_book.py`:这本书专用的一次性切分脚本。
+- `$WORK/chapters.json`:切分脚本输出。
+- `$WORK/exclude_patterns.txt`:可选,声明性排除规则。
+- `$WORK/verify.log`:完整性校验输出。
+
+清理规则:
+
+- 成功写入 `books/<书名>/` 且源文件已 `--save-source` 留档后,删除整个 `$WORK`:
+  `rm -rf "$WORK"`。
+- 校验或写入失败时,不要写入最终产物;如果已经写了一部分新书目录,删除这次新建的 `books/<书名>/`。
+- 失败需要排查时可以临时保留 `$WORK`,但必须在回报里写明路径;问题处理完后删除。
+
 ### 第 0 步:拿到本地文件
 
 - 用户直接给文件:记下路径,直接进第 1 步。
-- 用户给下载链接:先下到临时目录。GitHub `blob` 链接要转成 raw:
+- 用户给下载链接:先下到 `$WORK/source.<ext>`。GitHub `blob` 链接要转成 raw:
   `https://github.com/<u>/<repo>/blob/<branch>/<path>` -> `https://github.com/<u>/<repo>/raw/<branch>/<path>`。
 - 下载后用 `file <path>` 确认不是 HTML 错页。
 - 最终源文件必须通过 `--save-source` 留档进 `books/<书名>/`。
@@ -69,7 +93,7 @@ pip install EbookLib beautifulsoup4 mobi pypdf
 ### 第 1 步:探测格式和结构
 
 ```bash
-python3 SKILL/scripts/inspect_book.py <书源文件>
+python3 SKILL/scripts/inspect_book.py <书源文件> | tee "$WORK/inspect.log"
 ```
 
 读报告后判断:
@@ -93,7 +117,8 @@ python3 SKILL/scripts/inspect_book.py <书源文件>
 
 ### 第 3 步:写一次性切分脚本
 
-读 `SKILL/references/split-examples.md`,挑最接近的范例改成这本书专用脚本。脚本只做一件事:
+读 `SKILL/references/split-examples.md`,挑最接近的范例改成这本书专用脚本,保存到
+`$WORK/split_this_book.py`。脚本只做一件事:
 
 ```text
 load/source_text 出文本 -> 按这本书的结构切 -> 输出 [{"title","body"}, ...] JSON 到 stdout
@@ -114,7 +139,7 @@ from source_lib import load, plain, source_text
 先把一次性脚本输出成 JSON,不要直接写入:
 
 ```bash
-python3 /tmp/split_this_book.py > /tmp/chapters.json
+python3 "$WORK/split_this_book.py" > "$WORK/chapters.json"
 ```
 
 agent 自行检查,不向用户停顿确认:
@@ -132,7 +157,7 @@ agent 自行检查,不向用户停顿确认:
 必须运行:
 
 ```bash
-python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters /tmp/chapters.json
+python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters "$WORK/chapters.json" | tee "$WORK/verify.log"
 ```
 
 校验不通过时,不得写入 `books/<书名>/`。agent 必须查看缺失/重复片段,判断原因:
@@ -146,7 +171,7 @@ python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters /tmp/chapters
 如果是正文问题,修正切分脚本后重跑。如果是合理非深读内容,用声明性排除项后重跑:
 
 ```bash
-python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters /tmp/chapters.json \
+python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters "$WORK/chapters.json" \
   --exclude-regex "版权声明.*?版权所有" \
   --exclude-between "目录" "第一章"
 ```
@@ -169,7 +194,7 @@ python3 SKILL/scripts/verify_chapters.py <书源文件> --chapters /tmp/chapters
 python3 SKILL/scripts/write_chapters.py \
   --book <书名> --root ROOT \
   --base "<底本说明>" --save-source <源文件路径> \
-  --in /tmp/chapters.json
+  --in "$WORK/chapters.json"
 ```
 
 `write_chapters.py` 会:
