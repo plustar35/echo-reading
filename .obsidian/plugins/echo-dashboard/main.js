@@ -16,6 +16,16 @@ const DIMENSIONS = [
 ];
 const DIM_BY_KEY = Object.fromEntries(DIMENSIONS.map((d) => [d.key, d]));
 
+// 暖色系书籍配色：赤陶 / 鼠尾草绿 / 赭金 / 灰蓝 / 豆沙玫瑰 / 橄榄褐，
+// 与看板的米色底 + 赤陶强调色协调，避开扎眼的品红/荧光绿。按书名稳定排序取色，跨刷新不变。
+const BOOK_PALETTE = ["#c0703f", "#7a9b6e", "#d8a24a", "#6f8c9c", "#b06a78", "#9b8252"];
+function bookColorMap(names) {
+  const order = [...names].sort();
+  const m = new Map();
+  order.forEach((n, i) => m.set(n, BOOK_PALETTE[i % BOOK_PALETTE.length]));
+  return m;
+}
+
 /* ---------------- 数据解析 ---------------- */
 
 // "ch02 — 第一卷" / "第 19 章 — 绝圣弃智…" → "ch02" / "ch19"
@@ -113,20 +123,10 @@ function currentPosition(chapters) {
   return null;
 }
 
-// 最近一条带回看的已读项（书卡上的"最近回看"）
-function latestReview(chapters) {
-  let last = null;
-  for (const ch of chapters) {
-    for (const u of ch.units) if (u.done && u.review) last = { label: u.label, review: u.review };
-    if (ch.done && ch.review) last = { label: ch.label, review: ch.review };
-  }
-  return last;
-}
-
 /* ---------------- 阅读时长 ---------------- */
 /* RT-BEGIN：纯 Node 逻辑，不依赖 Obsidian API，可单独跑测试 */
 
-const RT_VERSION = 5; // 算法变更时 +1，作废旧缓存
+const RT_VERSION = 6; // 算法变更时 +1，作废旧缓存
 const RT_GAP_MS = 30 * 60 * 1000; // 用户超过 30min 没有回复 → 视为离开，该段不计
 const RT_MIN_BOOK_HITS = 3; // 书籍被提及少于这个次数 → 不算阅读会话
 // 判定 = 开场触发 ∨（行为佐证 ∧ 开场不是开发话术）。两条路任一即可：
@@ -203,9 +203,11 @@ function rtUserText(line) {
   return null;
 }
 
-// 一份 jsonl 会话全文 → { book, mins }（mins = 用户发消息的「分钟」时间戳，去重排序）；非阅读会话 → null
+// 一份 jsonl 会话全文 → { book, mins, times }；mins=用户发消息的「分钟」时间戳（去重排序），
+// times=每条用户消息的毫秒时间戳（算「对话次数」用，按毫秒去重可消掉 fork/resume 的复制）；非阅读会话 → null
 function rtParseSession(text, bookNames) {
   const minsSet = new Set();
+  const timesSet = new Set();
   const hits = new Map();
   const unitWrites = new Map(); // 书 → 写该书单元/批注文件的次数
   const progWrites = new Map(); // 书 → 写该书 progress.md 的次数
@@ -239,7 +241,10 @@ function rtParseSession(text, bookNames) {
     const m = tsRe.exec(line);
     if (m) {
       const t = Date.parse(m[1]);
-      if (!isNaN(t)) minsSet.add(Math.floor(t / 60000));
+      if (!isNaN(t)) {
+        minsSet.add(Math.floor(t / 60000));
+        timesSet.add(t);
+      }
     }
     if (s.includes(RT_SELECTION_MARK)) selection = true;
     if (userMsgN <= RT_TRIGGER_WITHIN) {
@@ -260,7 +265,7 @@ function rtParseSession(text, bookNames) {
   if (!trigger && !(confirmed && !devOpening)) return null;
   const mins = [...minsSet].sort((a, b) => a - b);
   if (mins.length < 2) return null;
-  return { book, mins };
+  return { book, mins, times: [...timesSet] };
 }
 
 async function rtReadHead(fsp, file, n) {
@@ -300,15 +305,16 @@ async function rtScan(vaultPath, bookNames, cache) {
     seen.add(file);
     const c = cache[file];
     if (c && c.mtime === st.mtimeMs && c.size === st.size) {
-      if (c.book) sessions.push({ book: c.book, mins: c.mins || [] });
+      if (c.book) sessions.push({ book: c.book, mins: c.mins || [], times: c.times || [] });
       return;
     }
-    const entry = { mtime: st.mtimeMs, size: st.size, book: null, mins: null };
+    const entry = { mtime: st.mtimeMs, size: st.size, book: null, mins: null, times: null };
     try {
       const parsed = await parse(file);
       if (parsed) {
         entry.book = parsed.book;
         entry.mins = parsed.mins;
+        entry.times = parsed.times;
         sessions.push(parsed);
       }
     } catch (e) {
@@ -396,34 +402,68 @@ async function rtScan(vaultPath, bookNames, cache) {
   return { ok: true, sessions, changed };
 }
 
-// 同一本书的所有会话先合并活动分钟再算时长：fork/resume 复制出的重复时间戳自然去重
+// 同一本书的所有会话先合并再聚合（fork/resume 复制出的重复时间戳自然去重）。
+// 每个 日期 / 书 / 累计 都是三元组 {sec, sessions, turns}：
+//   sec      = 相邻活动分钟间隔 ≤30min 的累加（同旧口径）
+//   sessions = 阅读会话（一份 jsonl 记一次），记到该会话首条消息那天
+//   turns    = 用户消息条数，按毫秒去重（一次用户回复算一次对话）
 function rtAggregate(sessions) {
-  const byBook = new Map();
+  const minsByBook = new Map(); // 书 → Set(分钟)
+  const timesByBook = new Map(); // 书 → Set(毫秒)
+  const fileDaysByBook = new Map(); // 书 → [每个会话文件首条消息所在天]
   for (const s of sessions) {
-    let set = byBook.get(s.book);
-    if (!set) byBook.set(s.book, (set = new Set()));
-    for (const m of s.mins) set.add(m);
+    let mset = minsByBook.get(s.book);
+    if (!mset) minsByBook.set(s.book, (mset = new Set()));
+    for (const m of s.mins) mset.add(m);
+    let tset = timesByBook.get(s.book);
+    if (!tset) timesByBook.set(s.book, (tset = new Set()));
+    for (const t of s.times || []) tset.add(t);
+    if (s.mins && s.mins.length) {
+      let arr = fileDaysByBook.get(s.book);
+      if (!arr) fileDaysByBook.set(s.book, (arr = []));
+      arr.push(rtLocalDay(s.mins[0] * 60000));
+    }
   }
-  const perBook = new Map(); // 书 → Map(日期 → 秒)   维度 1
-  const bookTotal = new Map(); // 书 → 秒              维度 2
-  const perDay = new Map(); // 日期 → 秒（全部书）     维度 3
-  let grand = 0; //                                    维度 4
-  for (const [book, set] of byBook) {
-    const mins = [...set].sort((a, b) => a - b);
+  const perBook = new Map(); // 书 → Map(日期 → {sec,sessions,turns})
+  const bookTotal = new Map(); // 书 → {sec,sessions,turns}
+  const perDay = new Map(); // 日期 → {sec,sessions,turns}（全部书）
+  const grand = { sec: 0, sessions: 0, turns: 0 };
+  for (const [book, mset] of minsByBook) {
+    const mins = [...mset].sort((a, b) => a - b);
     const days = new Map();
-    let total = 0;
+    const dayOf = (key) => {
+      let o = days.get(key);
+      if (!o) days.set(key, (o = { sec: 0, sessions: 0, turns: 0 }));
+      return o;
+    };
+    const total = { sec: 0, sessions: 0, turns: 0 };
     for (let i = 1; i < mins.length; i++) {
       const d = (mins[i] - mins[i - 1]) * 60000;
       if (d > RT_GAP_MS) continue;
-      const day = rtLocalDay(mins[i - 1] * 60000);
-      days.set(day, (days.get(day) || 0) + d / 1000);
-      total += d / 1000;
+      dayOf(rtLocalDay(mins[i - 1] * 60000)).sec += d / 1000;
+      total.sec += d / 1000;
     }
-    if (total < 60) continue;
-    for (const [day, sec] of days) perDay.set(day, (perDay.get(day) || 0) + sec);
+    for (const day of fileDaysByBook.get(book) || []) {
+      dayOf(day).sessions++;
+      total.sessions++;
+    }
+    for (const ms of timesByBook.get(book) || []) {
+      dayOf(rtLocalDay(ms)).turns++;
+      total.turns++;
+    }
+    if (total.sec < 60) continue;
+    for (const [day, o] of days) {
+      let pd = perDay.get(day);
+      if (!pd) perDay.set(day, (pd = { sec: 0, sessions: 0, turns: 0 }));
+      pd.sec += o.sec;
+      pd.sessions += o.sessions;
+      pd.turns += o.turns;
+    }
     perBook.set(book, days);
     bookTotal.set(book, total);
-    grand += total;
+    grand.sec += total.sec;
+    grand.sessions += total.sessions;
+    grand.turns += total.turns;
   }
   return { perBook, bookTotal, perDay, grand };
 }
@@ -444,7 +484,10 @@ class EchoDashboardView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.dimFilter = null; // 当前维度筛选
+    this.insightBook = null; // insight 书筛选：null=全部书
+    this.insightDate = null; // insight 日期筛选：null 或点热力图选中的某天
     this.rtScope = null; // 阅读时长视角：null=全部书，否则书名
+    this.rtRange = "累计"; // 大字指标的时间范围：今天/本周/本月/上月/累计
     this.data = null;
     this.rt = null;
   }
@@ -453,7 +496,7 @@ class EchoDashboardView extends ItemView {
     return VIEW_TYPE;
   }
   getDisplayText() {
-    return "深读看板";
+    return "ai陪读看板";
   }
   getIcon() {
     return "layout-dashboard";
@@ -476,7 +519,7 @@ class EchoDashboardView extends ItemView {
 
   async collectData() {
     const vault = this.app.vault;
-    const data = { books: [], insights: [], heat: new Map(), indexMeta: new Map() };
+    const data = { books: [], insights: [], indexMeta: new Map() };
 
     // 书
     const booksFolder = vault.getAbstractFileByPath("books");
@@ -493,7 +536,6 @@ class EchoDashboardView extends ItemView {
           chapters,
           stats: bookStats(chapters),
           pos: currentPosition(chapters),
-          lastReview: latestReview(chapters),
         });
       }
     }
@@ -503,12 +545,14 @@ class EchoDashboardView extends ItemView {
     if (indexFile instanceof TFile) {
       const text = await vault.cachedRead(indexFile);
       for (const line of text.split("\n")) {
-        const m = line.match(/^-\s*\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]\s*(★)?\s*—\s*(.+)$/);
-        if (m) data.indexMeta.set(m[1].trim(), { starred: !!m[2], summary: m[3].trim() });
+        // `]]` 到首个 `—` 之间是「标记区」：含 ★ 即加星，其余状态字（待读/精读…）忽略，不再卡住摘要
+        const m = line.match(/^-\s*\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]\s*([^—]*?)\s*—\s*(.+)$/);
+        if (m) data.indexMeta.set(m[1].trim(), { starred: m[2].includes("★"), summary: m[3].trim() });
       }
     }
 
-    // insight 条目 + 热力图日期
+    // insight 条目（含归属书 + 涉及日期，供 维度×书×日期 三层筛选）
+    const bookNames = new Set(data.books.map((b) => b.name));
     const insightFolder = vault.getAbstractFileByPath("insight");
     if (insightFolder instanceof TFolder) {
       for (const dim of insightFolder.children) {
@@ -519,6 +563,15 @@ class EchoDashboardView extends ItemView {
           let updated = typeof fm.updated === "string" ? fm.updated : null;
           if (!updated) updated = new Date(f.stat.mtime).toISOString().slice(0, 10);
           const meta = data.indexMeta.get(`${dim.name}/${f.basename}`) || {};
+          // 正文：溯源链 [[书名/chNN/…]] → 归属书（可多本）；YYYY-MM-DD → 涉及的日期
+          const body = await vault.cachedRead(f);
+          const books = new Set();
+          for (const lm of body.matchAll(/\[\[([^\]|/#]+)\/ch\d+/g)) {
+            if (bookNames.has(lm[1])) books.add(lm[1]);
+          }
+          const dates = new Set();
+          for (const dm of body.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)) dates.add(dm[1]);
+          dates.add(updated);
           data.insights.push({
             file: f,
             dim: dim.name,
@@ -526,12 +579,9 @@ class EchoDashboardView extends ItemView {
             updated,
             starred: !!meta.starred,
             summary: meta.summary || "",
+            books: [...books],
+            dates: [...dates],
           });
-          // 正文里出现的日期 → 热力图（同文件同日只记一次）
-          const body = await vault.cachedRead(f);
-          const seen = new Set();
-          for (const dm of body.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)) seen.add(dm[1]);
-          for (const day of seen) data.heat.set(day, (data.heat.get(day) || 0) + 1);
         }
       }
     }
@@ -550,7 +600,6 @@ class EchoDashboardView extends ItemView {
     this.renderHeader(el);
     this.renderBooks(el);
     this.renderReadingTime(el);
-    this.renderHeatmap(el);
     this.renderInsights(el);
   }
 
@@ -671,34 +720,24 @@ class EchoDashboardView extends ItemView {
   renderHeader(parent) {
     const header = parent.createDiv({ cls: "ed-header" });
     const titleWrap = header.createDiv({ cls: "ed-title-wrap" });
-    titleWrap.createEl("h1", { cls: "ed-title", text: "深读看板" });
-    titleWrap.createDiv({
-      cls: "ed-subtitle",
-      text: new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }),
-    });
+    const h1 = titleWrap.createEl("h1", { cls: "ed-title" });
+    h1.createSpan({ cls: "ed-title-ai", text: "ai" });
+    h1.createSpan({ text: "陪读看板" });
 
     const { books, insights } = this.data;
-    let chDone = 0,
-      chTotal = 0,
-      uDone = 0;
-    for (const b of books) {
-      chDone += b.stats.done;
-      chTotal += b.stats.total;
-      uDone += b.stats.unitsDone;
-    }
-    const open = insights.filter((i) => i.dim === "悬题").length;
 
     const pills = header.createDiv({ cls: "ed-pills" });
-    const pill = (icon, text) => {
+    const pill = (icon, value, label, color) => {
       const p = pills.createDiv({ cls: "ed-pill" });
+      p.style.setProperty("--pc", color);
       setIcon(p.createSpan({ cls: "ed-pill-icon" }), icon);
-      p.createSpan({ text });
+      p.createSpan({ cls: "ed-pill-val", text: value });
+      p.createSpan({ cls: "ed-pill-lab", text: label });
     };
-    pill("book-open", `${books.length} 本在读`);
-    pill("check-circle-2", `已读 ${chDone}/${chTotal} 章 · ${uDone} 个单元`);
-    pill("sparkles", `沉淀 ${insights.length} 条`);
-    pill("circle-help", `悬题 ${open} 个`);
-    if (this.rt && this.rt.ok && this.rt.agg.grand) pill("timer", `阅读 ${rtFmt(this.rt.agg.grand)}`);
+    pill("book-open", String(books.length), "本在读", "#c0703f");
+    if (this.rt && this.rt.ok && this.rt.agg.grand.sec)
+      pill("timer", rtFmt(this.rt.agg.grand.sec), "阅读", "#7a9b6e");
+    pill("sparkles", String(insights.length), "沉淀", "#d8a24a");
 
     const refreshBtn = header.createDiv({ cls: "ed-refresh", attr: { "aria-label": "刷新" } });
     setIcon(refreshBtn, "refresh-cw");
@@ -710,40 +749,44 @@ class EchoDashboardView extends ItemView {
     section.createEl("h2", { cls: "ed-section-title", text: "书架" });
     const grid = section.createDiv({ cls: "ed-book-grid" });
 
-    for (const book of this.data.books) {
+    // 排序：最近有沉淀的书排前面（insights 已按 updated 倒序，首见即最新）
+    const latestInsight = new Map();
+    for (const i of this.data.insights)
+      for (const b of i.books) if (!latestInsight.has(b)) latestInsight.set(b, i.updated);
+    const books = [...this.data.books].sort((a, b) => {
+      const da = latestInsight.get(a.name) || "";
+      const db = latestInsight.get(b.name) || "";
+      return da === db ? 0 : da < db ? 1 : -1;
+    });
+    const colorMap = bookColorMap(books.map((b) => b.name));
+
+    for (const book of books) {
       const card = grid.createDiv({ cls: "ed-book-card" });
+      card.style.setProperty("--bk", colorMap.get(book.name));
 
-      const top = card.createDiv({ cls: "ed-book-top" });
-      this.renderRing(top, book.stats.percent);
-      const info = top.createDiv({ cls: "ed-book-info" });
-
-      if (book.pos) {
-        const btn = top.createEl("button", { cls: "ed-continue-btn", attr: { "aria-label": `继续读《${book.name}》` } });
-        setIcon(btn.createSpan({ cls: "ed-continue-icon" }), "play");
-        btn.createSpan({ text: "继续阅读" });
-        btn.addEventListener("click", (evt) => {
-          evt.stopPropagation();
-          this.continueReading(book.name);
-        });
-      }
-
-      const nameEl = info.createDiv({ cls: "ed-book-name", text: `《${book.name}》` });
+      // 头：进度环（取书的签名色）+ 书名
+      const head = card.createDiv({ cls: "ed-book-head" });
+      this.renderRing(head, book.stats.percent, 44);
+      const nameEl = head.createDiv({ cls: "ed-book-name", text: `《${book.name}》` });
       nameEl.addEventListener("click", () => this.openInTab(book.progressFile));
       this.hoverable(nameEl, book.progressFile);
-      info.createDiv({
+
+      // 元信息：只剩 已读 x/x 章 + 正在读
+      const meta = card.createDiv({ cls: "ed-book-meta" });
+      meta.createDiv({
         cls: "ed-book-stat",
-        text:
-          `${book.stats.done}/${book.stats.total} 章` +
-          (book.stats.unitsTotal ? ` · 单元 ${book.stats.unitsDone}/${book.stats.unitsTotal}` : ""),
+        text: `已读 ${book.stats.done}/${book.stats.total} 章`,
       });
 
       if (book.pos) {
-        const posEl = info.createDiv({ cls: "ed-book-pos" });
-        setIcon(posEl.createSpan({ cls: "ed-pos-icon" }), "bookmark");
+        const posEl = meta.createDiv({ cls: "ed-book-pos" });
+        const label = posEl.createDiv({ cls: "ed-pos-label" });
+        setIcon(label.createSpan({ cls: "ed-pos-icon" }), "book-open");
+        label.createSpan({ text: "正在读" });
         const posLabel = book.pos.unit
           ? `${book.pos.chapter.label.split("—")[0].trim()} · ${book.pos.unit.label}`
           : book.pos.chapter.label;
-        posEl.createSpan({ cls: "ed-pos-text", text: posLabel });
+        posEl.createDiv({ cls: "ed-pos-text", text: posLabel });
         const target = this.resolveChapterFile(
           book.name,
           book.pos.chapter.chDir,
@@ -755,42 +798,52 @@ class EchoDashboardView extends ItemView {
           this.hoverable(posEl, target);
         }
       } else {
-        const doneEl = info.createDiv({ cls: "ed-book-pos" });
-        setIcon(doneEl.createSpan({ cls: "ed-pos-icon" }), "party-popper");
-        doneEl.createSpan({ cls: "ed-pos-text", text: "全书读完" });
+        const doneEl = meta.createDiv({ cls: "ed-book-pos ed-book-pos--done" });
+        const label = doneEl.createDiv({ cls: "ed-pos-label" });
+        setIcon(label.createSpan({ cls: "ed-pos-icon" }), "party-popper");
+        label.createSpan({ text: "全书读完" });
       }
 
-      // 章节点阵
-      const dots = card.createDiv({ cls: "ed-dots" });
-      for (const ch of book.chapters) {
-        const dot = dots.createDiv({ cls: "ed-dot" });
-        let state = "todo";
-        if (ch.done) state = "done";
-        else if (ch.units.some((u) => u.done)) state = "partial";
-        dot.addClass(`is-${state}`);
-        const unitsNote = ch.units.length
-          ? `（${ch.units.filter((u) => u.done).length}/${ch.units.length} 单元）`
-          : "";
-        dot.setAttribute("aria-label", ch.label + unitsNote);
-        const target = this.resolveChapterFile(book.name, ch.chDir, null);
-        if (target) {
-          dot.addClass("is-clickable");
-          dot.addEventListener("click", () => this.openInTab(target));
+      // 继续阅读（整宽）
+      if (book.pos) {
+        const btn = card.createEl("button", {
+          cls: "ed-continue-btn",
+          attr: { "aria-label": `继续读《${book.name}》` },
+        });
+        setIcon(btn.createSpan({ cls: "ed-continue-icon" }), "play");
+        btn.createSpan({ text: "继续阅读" });
+        btn.addEventListener("click", (evt) => {
+          evt.stopPropagation();
+          this.continueReading(book.name);
+        });
+      }
+
+      // 最近 3 条 insight（这本书照见的；data.insights 已按 updated 倒序）
+      const bookInsights = this.data.insights.filter((i) => i.books.includes(book.name)).slice(0, 3);
+      if (bookInsights.length) {
+        const ins = card.createDiv({ cls: "ed-book-insights" });
+        ins.createDiv({ cls: "ed-bi-cap", text: "最近沉淀" });
+        for (const it of bookInsights) {
+          const dim = DIM_BY_KEY[it.dim];
+          const r = ins.createDiv({ cls: "ed-bi-row" });
+          r.style.setProperty("--dim-hue", String(dim ? dim.hue : 0));
+          r.createSpan({ cls: "ed-bi-dot" });
+          if (it.starred) r.createSpan({ cls: "ed-star", text: "★" });
+          r.createSpan({ cls: "ed-bi-title", text: it.title });
+          r.createSpan({ cls: "ed-bi-date", text: it.updated.slice(5) });
+          r.setAttribute("aria-label", `${it.dim} · ${it.summary || it.title}`);
+          r.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            this.openInTab(it.file);
+          });
+          this.hoverable(r, it.file);
         }
-      }
-
-      if (book.lastReview) {
-        const rv = card.createDiv({ cls: "ed-book-review" });
-        rv.createSpan({ cls: "ed-review-tag", text: "最近回看" });
-        rv.createSpan({ cls: "ed-review-text", text: book.lastReview.review });
-        rv.setAttribute("aria-label", book.lastReview.label);
       }
     }
   }
 
-  renderRing(parent, percent) {
-    const size = 64;
-    const stroke = 6;
+  renderRing(parent, percent, size = 64) {
+    const stroke = Math.max(4, Math.round(size * 0.1));
     const r = (size - stroke) / 2;
     const c = 2 * Math.PI * r;
     const wrap = parent.createDiv({ cls: "ed-ring" });
@@ -826,108 +879,284 @@ class EchoDashboardView extends ItemView {
       return;
     }
     const { perBook, bookTotal, perDay, grand } = this.rt.agg;
-    if (!grand) {
+    if (!grand.sec) {
       section.createDiv({ cls: "ed-empty", text: "还没有可统计的阅读会话" });
       return;
     }
     if (this.rtScope && !perBook.has(this.rtScope)) this.rtScope = null;
 
-    // 范围 chips：全部 + 每本书，chip 上直接带累计时长（维度 2 / 4）
-    const chips = section.createDiv({ cls: "ed-chips" });
-    const mkChip = (label, total, scope, hue) => {
-      const chip = chips.createDiv({ cls: "ed-chip" });
-      chip.style.setProperty("--dim-hue", String(hue));
+    const booksSorted = [...bookTotal.entries()].sort((a, b) => b[1].sec - a[1].sec).map((e) => e[0]);
+    const bookColors = bookColorMap([...bookTotal.keys()]);
+
+    // 当前视角的「日期 → {sec,sessions,turns}」源：全部=各书合计，单本=该书
+    const source = this.rtScope ? perBook.get(this.rtScope) : perDay;
+    const scopeTotal = this.rtScope ? bookTotal.get(this.rtScope) : grand;
+    const secOf = (map, k) => (map.get(k) || {}).sec || 0;
+
+    // —— 书选择条：色块即筛选，点一本切到单本视角、点「全部」回到按书堆叠 ——
+    const picker = section.createDiv({ cls: "ed-rt-picker" });
+    const mkPick = (label, scope, sec, color, swatch) => {
+      const chip = picker.createDiv({ cls: "ed-rt-pick" });
+      chip.style.setProperty("--bk", color);
       if (this.rtScope === scope) chip.addClass("is-active");
-      chip.createSpan({ text: label });
-      chip.createSpan({ cls: "ed-rt-chip-time", text: rtFmt(total) });
+      swatch(chip.createSpan({ cls: "ed-rt-pick-sw" }));
+      chip.createSpan({ cls: "ed-rt-pick-name", text: label });
+      chip.createSpan({ cls: "ed-rt-pick-time", text: rtFmt(sec) });
       chip.addEventListener("click", () => {
-        if (this.rtScope === scope) return;
         this.rtScope = scope;
         this.refresh();
       });
     };
-    mkChip("全部", grand, null, 210);
-    const bookHue = (name) => [...name].reduce((a, c) => a + c.codePointAt(0), 0) % 360;
-    for (const [book, total] of [...bookTotal.entries()].sort((a, b) => b[1] - a[1])) {
-      mkChip(`《${book}》`, total, book, bookHue(book));
-    }
+    mkPick("全部", null, grand.sec, "var(--interactive-accent)", (sw) => {
+      sw.addClass("is-all");
+      for (const b of booksSorted) sw.createSpan({ cls: "ed-rt-pick-seg" }).style.background = bookColors.get(b);
+    });
+    for (const b of booksSorted)
+      mkPick(`${b}`, b, bookTotal.get(b).sec, bookColors.get(b), (sw) => {
+        sw.style.background = bookColors.get(b);
+      });
 
-    const source = this.rtScope ? perBook.get(this.rtScope) : perDay;
-
-    // 近 30 天柱状图（维度 1 / 3：书或全部 × 日期）
-    const dayKeys = [];
+    // —— 时间范围（点一个 tab）→ 三个大字指标：时长 / 会话 / 对话 ——
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      dayKeys.push(rtLocalDay(d.getTime()));
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7)); // 周一为界
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const sumRange = (from, to) => {
+      const o = { sec: 0, sessions: 0, turns: 0 };
+      for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+        const v = source.get(rtLocalDay(d.getTime()));
+        if (v) {
+          o.sec += v.sec;
+          o.sessions += v.sessions;
+          o.turns += v.turns;
+        }
+      }
+      return o;
+    };
+    // [label, 指标函数, 起, 止]；累计 = 全时段（不框选高亮）
+    const ranges = [
+      ["今天", () => sumRange(today, today), today, today],
+      ["本周", () => sumRange(weekStart, today), weekStart, today],
+      ["本月", () => sumRange(monthStart, today), monthStart, today],
+      ["上月", () => sumRange(lastMonthStart, lastMonthEnd), lastMonthStart, lastMonthEnd],
+      ["累计", () => scopeTotal, null, null],
+    ];
+    if (!ranges.some(([l]) => l === this.rtRange)) this.rtRange = "累计";
+
+    const tabs = section.createDiv({ cls: "ed-rt-tabs" });
+    for (const [label] of ranges) {
+      const tab = tabs.createDiv({ cls: "ed-rt-tab" + (this.rtRange === label ? " is-active" : "") });
+      tab.setText(label);
+      tab.addEventListener("click", () => {
+        this.rtRange = label;
+        this.refresh();
+      });
     }
-    const vals = dayKeys.map((k) => source.get(k) || 0);
-    const max = Math.max(...vals, 1);
-    const chart = section.createDiv({ cls: "ed-rt-chart" });
+
+    const sel = ranges.find(([l]) => l === this.rtRange);
+    const cur = sel[1]();
+    // 当前 tab 对应的高亮区间（用于柱状图框选 + 滚动定位）；累计为 null
+    const hlFrom = sel[2] ? rtLocalDay(sel[2].getTime()) : null;
+    const hlTo = sel[3] ? rtLocalDay(sel[3].getTime()) : null;
+    const metrics = section.createDiv({ cls: "ed-rt-metrics" });
+    const num = (el, t) => el.createSpan({ cls: "ed-rt-num", text: String(t) });
+    const unit = (el, t) => el.createSpan({ cls: "ed-rt-unit", text: t });
+    const metric = (primary, build, label) => {
+      const mt = metrics.createDiv({ cls: "ed-rt-metric" + (primary ? " is-primary" : "") });
+      build(mt.createDiv({ cls: "ed-rt-metric-val" }));
+      mt.createDiv({ cls: "ed-rt-metric-lab", text: label });
+    };
+    metric(
+      true,
+      (el) => {
+        const min = Math.round(cur.sec / 60);
+        const h = Math.floor(min / 60);
+        if (h > 0) {
+          num(el, h);
+          unit(el, "h");
+          if (min % 60) {
+            num(el, min % 60);
+            unit(el, "m");
+          }
+        } else {
+          num(el, min);
+          unit(el, "m");
+        }
+      },
+      "时长"
+    );
+    metric(false, (el) => (num(el, cur.sessions), unit(el, "次")), "会话");
+    metric(false, (el) => (num(el, cur.turns), unit(el, "次")), "对话");
+
+    // —— 柱状图（按天时长）：最早有数据那天 ~ 今天（至少 30 天）；超出宽度下方出滑块往前翻 ——
+    let earliest = null;
+    for (const k of perDay.keys()) if (!earliest || k < earliest) earliest = k;
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 29);
+    if (earliest) {
+      const e = new Date(earliest + "T00:00:00");
+      if (e < startDate) startDate.setTime(e.getTime());
+    }
+    const dayKeys = [];
+    for (const d = new Date(startDate); d <= today; d.setDate(d.getDate() + 1)) dayKeys.push(rtLocalDay(d.getTime()));
+    const dayTotals = dayKeys.map((k) => secOf(source, k));
+    const max = Math.max(...dayTotals, 1);
+    const stackBooks = this.rtScope ? [this.rtScope] : booksSorted;
+
+    // 即时悬浮卡：挂到 document.body（避开 Obsidian 叶子容器的 transform/containment
+    // 让 fixed 定位偏移），用 getBoundingClientRect 的视口坐标精确贴到柱子上方
+    if (this._rtTip) this._rtTip.remove();
+    const tip = document.body.createDiv({ cls: "echo-dash-rt-tip" });
+    this._rtTip = tip;
+    const fmtDay = (k) => {
+      const p = k.split("-");
+      return `${+p[1]} 月 ${+p[2]} 日`;
+    };
+    const showTip = (col, k, rows, total) => {
+      tip.empty();
+      tip.createDiv({ cls: "ed-rt-tip-date", text: fmtDay(k) });
+      const list = tip.createDiv({ cls: "ed-rt-tip-list" });
+      for (const r of rows) {
+        const row = list.createDiv({ cls: "ed-rt-tip-row" });
+        row.createSpan({ cls: "ed-rt-tip-dot" }).style.background = r.color;
+        row.createSpan({ cls: "ed-rt-tip-name", text: r.name });
+        row.createSpan({ cls: "ed-rt-tip-time", text: rtFmt(r.sec) });
+      }
+      if (rows.length > 1) {
+        const f = tip.createDiv({ cls: "ed-rt-tip-foot" });
+        f.createSpan({ cls: "ed-rt-tip-flabel", text: "合计" });
+        f.createSpan({ cls: "ed-rt-tip-time", text: rtFmt(total) });
+      }
+      tip.addClass("is-show");
+      const rect = col.getBoundingClientRect();
+      tip.style.top = rect.top - 10 + "px";
+      const half = tip.offsetWidth / 2;
+      tip.style.left = Math.max(8 + half, Math.min(window.innerWidth - 8 - half, rect.left + rect.width / 2)) + "px";
+    };
+    const hideTip = () => tip.removeClass("is-show");
+
+    const scroll = section.createDiv({ cls: "ed-rt-scroll" });
+    const chart = scroll.createDiv({ cls: "ed-rt-chart" });
+    chart.addEventListener("mouseleave", hideTip);
+    let lastInRange = null; // 选中区间里最靠右那根柱，滚动时右对齐到它
     dayKeys.forEach((k, i) => {
       const col = chart.createDiv({ cls: "ed-rt-col" });
-      col.setAttribute("aria-label", `${k} · ${rtFmt(vals[i])}`);
-      const bar = col.createDiv({ cls: "ed-rt-bar" });
-      if (vals[i]) bar.style.height = Math.max(6, Math.round((vals[i] / max) * 100)) + "%";
-      else bar.addClass("is-zero");
-      if (i % 7 === 1 || i === 29) col.createDiv({ cls: "ed-rt-xlabel", text: k.slice(5) });
+      const total = dayTotals[i];
+      const inRange = !hlFrom || (k >= hlFrom && k <= hlTo);
+      if (!inRange) col.addClass("is-dim");
+      else lastInRange = col;
+      const barbox = col.createDiv({ cls: "ed-rt-barbox" });
+      const stack = barbox.createDiv({ cls: "ed-rt-stack" });
+      const rows = [];
+      if (total > 0) {
+        stack.style.height = Math.max(4, Math.round((total / max) * 100)) + "%";
+        for (const b of stackBooks) {
+          const sec = secOf(perBook.get(b) || new Map(), k);
+          if (sec <= 0) continue;
+          const color = this.rtScope ? "var(--interactive-accent)" : bookColors.get(b);
+          const seg = stack.createDiv({ cls: "ed-rt-seg" });
+          seg.style.height = (sec / total) * 100 + "%";
+          seg.style.background = color;
+          rows.push({ name: b, sec, color });
+        }
+        col.addEventListener("mouseenter", () => showTip(col, k, rows, total));
+      } else {
+        stack.addClass("is-zero");
+      }
+      const lab = col.createDiv({ cls: "ed-rt-xlabel" });
+      if (i % 7 === 0 || i === dayKeys.length - 1) lab.setText(k.slice(5));
     });
-
-    // 当前范围的汇总行
-    const recent = (n) => dayKeys.slice(30 - n).reduce((a, k) => a + (source.get(k) || 0), 0);
-    const totalScope = this.rtScope ? bookTotal.get(this.rtScope) || 0 : grand;
-    const summary = section.createDiv({ cls: "ed-rt-summary" });
-    const sumItem = (label, sec) => {
-      const it = summary.createDiv({ cls: "ed-rt-sum-item" });
-      it.createSpan({ cls: "ed-rt-sum-label", text: label });
-      it.createSpan({ cls: "ed-rt-sum-val", text: rtFmt(sec) });
-    };
-    sumItem("今日", recent(1));
-    sumItem("近 7 天", recent(7));
-    sumItem("近 30 天", recent(30));
-    sumItem("累计", totalScope);
+    // 选中区间完全落在柱图窗口之外（如月底看上月而数据更晚）→ 别把整图淡掉
+    if (hlFrom && !lastInRange) for (const c of Array.from(chart.children)) c.removeClass("is-dim");
+    // 把选中区间滚进视野：累计 / 区间不在窗口 → 停最右（最新）；其余 → 右对齐到区间末柱
+    requestAnimationFrame(() => {
+      if (!hlFrom || !lastInRange) {
+        scroll.scrollLeft = scroll.scrollWidth;
+        return;
+      }
+      const cRect = lastInRange.getBoundingClientRect();
+      const sRect = scroll.getBoundingClientRect();
+      scroll.scrollLeft += cRect.right - sRect.left - scroll.clientWidth + 6;
+    });
   }
 
-  renderHeatmap(parent) {
-    const section = parent.createDiv({ cls: "ed-section" });
-    section.createEl("h2", { cls: "ed-section-title", text: "沉淀热力 · 近 16 周" });
-    const wrap = section.createDiv({ cls: "ed-heat-wrap" });
+  // insight 日期轴：按当前 维度+书 过滤后逐日计数，做成一条暖色"沉淀脉络"；点亮处=选/取消那天
+  renderInsightHeat(rail, heatSet) {
+    const heat = new Map();
+    for (const i of heatSet) for (const day of i.dates) heat.set(day, (heat.get(day) || 0) + 1);
+
+    const row = rail.createDiv({ cls: "ed-ins-row ed-ins-row--heat" });
+    row.createSpan({ cls: "ed-ins-label", text: "日" });
+    const wrap = row.createDiv({ cls: "ed-heat-wrap" });
     const grid = wrap.createDiv({ cls: "ed-heat" });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const days = 7 * 16;
-    // 从 16 周前的周一开始
     const start = new Date(today);
-    start.setDate(start.getDate() - (days - 1));
-    const offset = (start.getDay() + 6) % 7; // 周一=0
-    start.setDate(start.getDate() - offset);
+    start.setDate(start.getDate() - (7 * 16 - 1));
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // 对齐到周一
 
-    const fmt = (d) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-      const key = fmt(d);
-      const n = this.data.heat.get(key) || 0;
+    for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+      const key = rtLocalDay(d.getTime());
+      const n = heat.get(key) || 0;
       const cell = grid.createDiv({ cls: "ed-heat-cell" });
       const lvl = n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3;
       cell.addClass(`lv-${lvl}`);
+      if (this.insightDate === key) cell.addClass("is-sel");
       cell.setAttribute("aria-label", `${key} · ${n} 条`);
+      if (n > 0) {
+        cell.addClass("is-clickable");
+        cell.addEventListener("click", () => {
+          this.insightDate = this.insightDate === key ? null : key;
+          this.refresh();
+        });
+      }
+    }
+
+    if (this.insightDate) {
+      const tag = row.createDiv({ cls: "ed-heat-sel" });
+      tag.createSpan({ cls: "ed-heat-sel-d", text: this.insightDate.slice(5) });
+      const x = tag.createSpan({ cls: "ed-heat-sel-x", text: "✕" });
+      x.addEventListener("click", () => {
+        this.insightDate = null;
+        this.refresh();
+      });
+    } else {
+      row.createSpan({ cls: "ed-heat-hint", text: "近 16 周 · 点亮处筛某天" });
     }
   }
 
   renderInsights(parent) {
-    const section = parent.createDiv({ cls: "ed-section" });
+    const section = parent.createDiv({ cls: "ed-section ed-ins" });
+    const all = this.data.insights;
+    const inBook = (i) => !this.insightBook || i.books.includes(this.insightBook);
+    const inDate = (i) => !this.insightDate || i.dates.includes(this.insightDate);
+
     const head = section.createDiv({ cls: "ed-insight-head" });
     head.createEl("h2", { cls: "ed-section-title", text: "Insight 沉淀" });
+    head.createSpan({ cls: "ed-ins-total", text: `共 ${all.length} 条` });
 
-    // 维度筛选 chips
-    const chips = section.createDiv({ cls: "ed-chips" });
+    // —— 筛选轨：维度 / 书 / 日，三行同一套视觉语言 ——
+    const rail = section.createDiv({ cls: "ed-ins-rail" });
+
+    // 维度行（计数反映当前 书+日期 过滤）
+    const baseSet = all.filter((i) => inBook(i) && inDate(i));
+    const dimRow = rail.createDiv({ cls: "ed-ins-row" });
+    dimRow.createSpan({ cls: "ed-ins-label", text: "维度" });
+    const dimChips = dimRow.createDiv({ cls: "ed-chips" });
+    const allDim = dimChips.createDiv({ cls: "ed-chip ed-chip--all" });
+    if (!this.dimFilter) allDim.addClass("is-active");
+    allDim.createSpan({ text: `全部 ${baseSet.length}` });
+    allDim.addEventListener("click", () => {
+      this.dimFilter = null;
+      this.refresh();
+    });
     for (const dim of DIMENSIONS) {
-      const count = this.data.insights.filter((i) => i.dim === dim.key).length;
-      const chip = chips.createDiv({ cls: "ed-chip" });
+      const count = baseSet.filter((i) => i.dim === dim.key).length;
+      const chip = dimChips.createDiv({ cls: "ed-chip" });
       chip.style.setProperty("--dim-hue", String(dim.hue));
       if (this.dimFilter === dim.key) chip.addClass("is-active");
       setIcon(chip.createSpan({ cls: "ed-chip-icon" }), dim.icon);
@@ -938,34 +1167,107 @@ class EchoDashboardView extends ItemView {
       });
     }
 
-    const list = section.createDiv({ cls: "ed-insight-list" });
-    const items = this.dimFilter
-      ? this.data.insights.filter((i) => i.dim === this.dimFilter)
-      : this.data.insights.slice(0, 14);
-
-    if (this.dimFilter === null && this.data.insights.length > 14) {
-      head.createSpan({ cls: "ed-insight-hint", text: "最近 14 条 · 点维度看全部" });
+    // 书行（色块即筛选，配色与书架 / 阅读时长一致）
+    const bookCount = new Map();
+    for (const i of all) for (const b of i.books) bookCount.set(b, (bookCount.get(b) || 0) + 1);
+    const colorMap = bookColorMap([...bookCount.keys()]);
+    const bookRow = rail.createDiv({ cls: "ed-ins-row" });
+    bookRow.createSpan({ cls: "ed-ins-label", text: "书" });
+    const bookChips = bookRow.createDiv({ cls: "ed-chips" });
+    const allBook = bookChips.createDiv({ cls: "ed-bchip ed-bchip--all" });
+    if (!this.insightBook) allBook.addClass("is-active");
+    allBook.createSpan({ text: `全部 ${all.length}` });
+    allBook.addEventListener("click", () => {
+      this.insightBook = null;
+      this.refresh();
+    });
+    for (const [b, n] of [...bookCount.entries()].sort((a, b2) => b2[1] - a[1])) {
+      const chip = bookChips.createDiv({ cls: "ed-bchip" });
+      chip.style.setProperty("--bk", colorMap.get(b));
+      if (this.insightBook === b) chip.addClass("is-active");
+      chip.createDiv({ cls: "ed-bchip-sw" });
+      chip.createSpan({ cls: "ed-bchip-name", text: `《${b}》` });
+      chip.createSpan({ cls: "ed-bchip-n", text: String(n) });
+      chip.addEventListener("click", () => {
+        this.insightBook = this.insightBook === b ? null : b;
+        this.refresh();
+      });
     }
 
-    for (const item of items) {
-      const dim = DIM_BY_KEY[item.dim];
-      const row = list.createDiv({ cls: "ed-insight-row" });
-      row.style.setProperty("--dim-hue", String(dim ? dim.hue : 0));
-      const main = row.createDiv({ cls: "ed-insight-main" });
-      const titleLine = main.createDiv({ cls: "ed-insight-title-line" });
-      if (item.starred) titleLine.createSpan({ cls: "ed-star", text: "★" });
-      titleLine.createSpan({ cls: "ed-insight-title", text: item.title });
-      titleLine.createSpan({ cls: "ed-insight-dim", text: item.dim });
-      if (item.summary) main.createDiv({ cls: "ed-insight-summary", text: item.summary });
-      row.createDiv({ cls: "ed-insight-date", text: item.updated.slice(5) });
-      row.addEventListener("click", () => this.openInTab(item.file));
-      this.hoverable(row, item.file);
-    }
+    // 日期行（暖色脉络；计数按 维度+书 过滤，不被已选日期收窄）
+    const heatSet = all.filter((i) => inBook(i) && (!this.dimFilter || i.dim === this.dimFilter));
+    this.renderInsightHeat(rail, heatSet);
 
-    if (!items.length) list.createDiv({ cls: "ed-empty", text: "这个维度还没有沉淀" });
+    // —— 便签墙：每条沉淀一张便签，按维度着色；轮转分列＝横向阅读序 + 每列各自紧贴（无缝）——
+    const items = baseSet.filter((i) => !this.dimFilter || i.dim === this.dimFilter);
+    const board = section.createDiv({ cls: "ed-board" });
+    if (!items.length) {
+      board.createDiv({ cls: "ed-empty", text: "没有匹配的沉淀" });
+      return;
+    }
+    const noteEls = items.map((item) => this.buildNote(item));
+    this.mountBoard(board, noteEls);
+  }
+
+  // 单张便签元素（脱离文档构建，交给 mountBoard 分列）
+  buildNote(item) {
+    const dim = DIM_BY_KEY[item.dim];
+    const note = document.createElement("div");
+    note.addClass("ed-note");
+    note.style.setProperty("--dim-hue", String(dim ? dim.hue : 0));
+    note.createDiv({ cls: "ed-note-tape" });
+
+    const top = note.createDiv({ cls: "ed-note-top" });
+    const dimTag = top.createDiv({ cls: "ed-note-dim" });
+    dimTag.createDiv({ cls: "ed-note-dot" });
+    dimTag.createSpan({ text: item.dim });
+    if (item.starred) top.createSpan({ cls: "ed-note-star", text: "★" });
+
+    note.createDiv({ cls: "ed-note-title", text: item.title });
+    if (item.summary) note.createDiv({ cls: "ed-note-summary", text: item.summary });
+
+    const foot = note.createDiv({ cls: "ed-note-foot" });
+    if (item.books.length) {
+      const bl = item.books.length > 1 ? `跨 ${item.books.length} 书` : `《${item.books[0]}》`;
+      foot.createSpan({ cls: "ed-note-book", text: bl });
+    }
+    foot.createSpan({ cls: "ed-note-date", text: item.updated.slice(5) });
+
+    note.addEventListener("click", () => this.openInTab(item.file));
+    this.hoverable(note, item.file);
+    return note;
+  }
+
+  // 把便签轮转分进若干列：第 i 张 → 第 i%cols 列。列数随宽度变，resize 时重排。
+  mountBoard(board, noteEls) {
+    const GAP = 14; // 与 .ed-board 的列间距一致
+    const TARGET = 232; // 目标列宽
+    const MAXCOLS = 4;
+    const distribute = () => {
+      const w = board.clientWidth || 0;
+      const cols = Math.max(1, Math.min(MAXCOLS, Math.floor((w + GAP) / (TARGET + GAP)) || 1));
+      if (board._cols === cols && board.childElementCount) return; // 列数没变就不折腾
+      board._cols = cols;
+      board.empty();
+      const colEls = [];
+      for (let i = 0; i < cols; i++) colEls.push(board.createDiv({ cls: "ed-board-col" }));
+      noteEls.forEach((n, i) => colEls[i % cols].appendChild(n));
+    };
+    distribute();
+    if (this._boardRO) this._boardRO.disconnect();
+    this._boardRO = new ResizeObserver(() => distribute());
+    this._boardRO.observe(board);
   }
 
   async onClose() {
+    if (this._rtTip) {
+      this._rtTip.remove();
+      this._rtTip = null;
+    }
+    if (this._boardRO) {
+      this._boardRO.disconnect();
+      this._boardRO = null;
+    }
     this.contentEl.empty();
   }
 }

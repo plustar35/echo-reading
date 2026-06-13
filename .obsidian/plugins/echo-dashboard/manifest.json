@@ -1,7 +1,7 @@
 {
   "id": "echo-dashboard",
   "name": "Echo Reading Dashboard",
-  "version": "0.3.0",
+  "version": "0.6.9",
   "minAppVersion": "1.4.0",
   "description": "对话式深读项目的可视化看板：书籍进度、阅读时长、insight 沉淀、活动热力图。",
   "author": "caijiaxin",
