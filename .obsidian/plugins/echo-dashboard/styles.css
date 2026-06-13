@@ -143,6 +143,37 @@
 
 .echo-dash .ed-book-info {
   min-width: 0;
+  flex: 1;
+}
+
+/* 继续阅读按钮 */
+.echo-dash .ed-continue-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: none;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.echo-dash .ed-continue-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.echo-dash .ed-continue-btn:active {
+  transform: translateY(0);
+}
+.echo-dash .ed-continue-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .echo-dash .ed-book-name {
@@ -237,6 +268,77 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ---------- reading time ---------- */
+
+.echo-dash .ed-rt-chip-time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim-color);
+}
+
+.echo-dash .ed-rt-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 96px;
+  margin: 6px 0 26px;
+}
+.echo-dash .ed-rt-col {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.echo-dash .ed-rt-col:hover .ed-rt-bar {
+  filter: brightness(1.2);
+}
+.echo-dash .ed-rt-bar {
+  border-radius: 3px 3px 0 0;
+  background: var(--interactive-accent);
+  transition: height 0.3s ease;
+}
+.echo-dash .ed-rt-bar.is-zero {
+  height: 2px;
+  background: var(--background-modifier-border);
+  border-radius: 1px;
+}
+.echo-dash .ed-rt-xlabel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 5px;
+  font-size: 0.68em;
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.echo-dash .ed-rt-summary {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+.echo-dash .ed-rt-sum-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.echo-dash .ed-rt-sum-label {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.echo-dash .ed-rt-sum-val {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- heatmap ---------- */

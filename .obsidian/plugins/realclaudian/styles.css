@@ -65,18 +65,6 @@ body.theme-light .claudian-container {
   font-family: var(--font-text);
 }
 
-.claudian-hidden {
-  display: none !important;
-}
-
-.claudian-visible-block {
-  display: block !important;
-}
-
-.claudian-visible-flex {
-  display: flex !important;
-}
-
 .claudian-provider-icon-variant--dark {
   display: none;
 }
@@ -1778,13 +1766,16 @@ body.theme-light .claudian-message-content pre {
 /* Input wrapper (border container) - flex column so textarea expands when no chips */
 /* Height calculation: context row (36px) + textarea min (60px) + toolbar (38px) + border (2px) = 136px */
 .claudian-input-wrapper {
+  --claudian-input-wrapper-border-color: var(--background-modifier-border);
+  --claudian-input-wrapper-box-shadow: none;
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 140px;
-  border: 1px solid var(--background-modifier-border);
+  border: 1px solid var(--claudian-input-wrapper-border-color);
   border-radius: 6px;
   background: var(--background-primary);
+  box-shadow: var(--claudian-input-wrapper-box-shadow);
 }
 
 /* Context row (file chip start, selection indicator end) - inside input wrapper at top */
@@ -1848,34 +1839,34 @@ body.theme-light .claudian-message-content pre {
   text-overflow: ellipsis;
 }
 
-.claudian-input {
+.claudian-input-wrapper textarea.claudian-input {
   width: 100%;
   flex: 1 1 0;
   min-height: var(--claudian-textarea-min-height, 60px);
   max-height: var(--claudian-textarea-max-height, none);
   resize: none;
   padding: 8px 10px 10px 10px;
-  border: none !important;
+  border: none;
   border-radius: 6px;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-normal);
   font-family: inherit;
   font-size: 14px;
   line-height: 1.4;
-  box-shadow: none !important;
+  box-shadow: none;
   overflow-y: auto;
   unicode-bidi: plaintext; /* Proper BiDi text handling for mixed RTL/LTR */
 }
 
-.claudian-input:hover,
-.claudian-input:focus {
-  outline: none !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+.claudian-input-wrapper textarea.claudian-input:hover,
+.claudian-input-wrapper textarea.claudian-input:focus {
+  outline: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
-.claudian-input::placeholder {
+.claudian-input-wrapper textarea.claudian-input::placeholder {
   color: var(--text-muted);
 }
 
@@ -2023,15 +2014,15 @@ body.theme-light .claudian-message-content pre {
 }
 
 /* Light blue border when instruction mode is active */
-.claudian-input-instruction-mode {
-  border-color: #60a5fa !important;
-  box-shadow: 0 0 0 1px #60a5fa;
+.claudian-input-wrapper.claudian-input-instruction-mode {
+  --claudian-input-wrapper-border-color: #60a5fa;
+  --claudian-input-wrapper-box-shadow: 0 0 0 1px #60a5fa;
 }
 
 /* Pink border when bash mode is active */
-.claudian-input-bang-bash-mode {
-  border-color: #f472b6 !important;
-  box-shadow: 0 0 0 1px #f472b6;
+.claudian-input-wrapper.claudian-input-bang-bash-mode {
+  --claudian-input-wrapper-border-color: #f472b6;
+  --claudian-input-wrapper-box-shadow: 0 0 0 1px #f472b6;
 }
 
 /* Monospace input while in bash mode */
@@ -3318,8 +3309,8 @@ code .claudian-file-link:hover {
 
 /* Selection highlight (shared by inline edit and chat) */
 .cm-line .claudian-selection-highlight,
-.claudian-selection-highlight {
-  background: var(--text-selection) !important;
+.claudian-selection-highlight.claudian-selection-highlight {
+  background: var(--text-selection);
   border-radius: 2px;
   padding: 3px 0;
   margin: -3px 0;
@@ -3331,9 +3322,9 @@ code .claudian-file-link:hover {
 }
 
 /* CM6 widget container - ensure transparent background */
-.cm-widgetBuffer,
-.cm-line.claudian-inline-input-line {
-  background: transparent !important;
+.markdown-source-view.mod-cm6 .cm-widgetBuffer,
+.markdown-source-view.mod-cm6 .cm-line.claudian-inline-input-line {
+  background: transparent;
 }
 
 /* Input container - fully transparent */
@@ -3342,43 +3333,43 @@ code .claudian-file-link:hover {
   flex-direction: column;
   gap: 0;
   padding: 2px 0;
-  background: transparent !important;
+  background: transparent;
 }
 
 /* Input wrapper - contains input and spinner */
 .claudian-inline-input-wrap {
   flex: 1;
   position: relative;
-  background: transparent !important;
+  background: transparent;
   overflow: visible;
 }
 
 /* Input - fully transparent */
-.claudian-inline-input {
+.claudian-inline-input-wrap input.claudian-inline-input {
   width: 100%;
   padding: 4px 8px;
   padding-inline-end: 30px;
-  border-width: 1px !important;
-  border-style: solid !important;
-  border-color: var(--background-modifier-border) !important;
-  border-radius: 8px !important;
-  background: transparent !important;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--background-modifier-border);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-normal);
-  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif) !important;
-  font-size: var(--font-ui-small, 13px) !important;
+  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: var(--font-ui-small, 13px);
 }
 
-.claudian-inline-input:focus,
-.claudian-inline-input:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+.claudian-inline-input-wrap input.claudian-inline-input:focus,
+.claudian-inline-input-wrap input.claudian-inline-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
-.claudian-inline-input::placeholder {
+.claudian-inline-input-wrap input.claudian-inline-input::placeholder {
   color: var(--text-faint);
 }
 
-.claudian-inline-input:disabled {
+.claudian-inline-input-wrap input.claudian-inline-input:disabled {
   opacity: 0.6;
 }
 
@@ -3448,67 +3439,67 @@ code .claudian-file-link:hover {
   height: auto;
 }
 
-.claudian-inline-diff-preview p {
-  margin: 0 0 6px !important;
+.claudian-inline-diff-preview .markdown-rendered p {
+  margin: 0 0 6px;
 }
 
-.claudian-inline-diff-preview p:last-child {
+.claudian-inline-diff-preview .markdown-rendered p:last-child {
   margin-bottom: 0;
 }
 
-.claudian-inline-diff-preview h1,
-.claudian-inline-diff-preview h2,
-.claudian-inline-diff-preview h3,
-.claudian-inline-diff-preview h4,
-.claudian-inline-diff-preview h5,
-.claudian-inline-diff-preview h6 {
-  margin: 0 0 6px !important;
+.claudian-inline-diff-preview .markdown-rendered h1,
+.claudian-inline-diff-preview .markdown-rendered h2,
+.claudian-inline-diff-preview .markdown-rendered h3,
+.claudian-inline-diff-preview .markdown-rendered h4,
+.claudian-inline-diff-preview .markdown-rendered h5,
+.claudian-inline-diff-preview .markdown-rendered h6 {
+  margin: 0 0 6px;
   line-height: 1.25;
 }
 
-.claudian-inline-diff-preview h1:first-child,
-.claudian-inline-diff-preview h2:first-child,
-.claudian-inline-diff-preview h3:first-child,
-.claudian-inline-diff-preview h4:first-child,
-.claudian-inline-diff-preview h5:first-child,
-.claudian-inline-diff-preview h6:first-child {
+.claudian-inline-diff-preview .markdown-rendered h1:first-child,
+.claudian-inline-diff-preview .markdown-rendered h2:first-child,
+.claudian-inline-diff-preview .markdown-rendered h3:first-child,
+.claudian-inline-diff-preview .markdown-rendered h4:first-child,
+.claudian-inline-diff-preview .markdown-rendered h5:first-child,
+.claudian-inline-diff-preview .markdown-rendered h6:first-child {
   margin-top: 0;
 }
 
-.claudian-inline-diff-preview ul,
-.claudian-inline-diff-preview ol {
-  margin: 2px 0 8px !important;
-  padding-inline-start: 1.5em !important;
+.claudian-inline-diff-preview .markdown-rendered ul,
+.claudian-inline-diff-preview .markdown-rendered ol {
+  margin: 2px 0 8px;
+  padding-inline-start: 1.5em;
 }
 
-.claudian-inline-diff-preview li {
-  margin: 2px 0 !important;
+.claudian-inline-diff-preview .markdown-rendered li {
+  margin: 2px 0;
 }
 
-.claudian-inline-diff-preview li > p {
-  margin: 0 !important;
+.claudian-inline-diff-preview .markdown-rendered li > p {
+  margin: 0;
 }
 
-.claudian-inline-diff-preview pre,
-.claudian-inline-diff-preview table,
-.claudian-inline-diff-preview blockquote {
-  margin: 2px 0 8px !important;
+.claudian-inline-diff-preview .markdown-rendered pre,
+.claudian-inline-diff-preview .markdown-rendered table,
+.claudian-inline-diff-preview .markdown-rendered blockquote {
+  margin: 2px 0 8px;
 }
 
-.claudian-inline-diff-preview .el-h1,
-.claudian-inline-diff-preview .el-h2,
-.claudian-inline-diff-preview .el-h3,
-.claudian-inline-diff-preview .el-h4,
-.claudian-inline-diff-preview .el-h5,
-.claudian-inline-diff-preview .el-h6,
-.claudian-inline-diff-preview .el-p,
-.claudian-inline-diff-preview .el-ul,
-.claudian-inline-diff-preview .el-ol,
-.claudian-inline-diff-preview .el-pre,
-.claudian-inline-diff-preview .el-table,
-.claudian-inline-diff-preview .el-blockquote {
-  margin-block-start: 0 !important;
-  margin-block-end: 6px !important;
+.claudian-inline-diff-preview .markdown-rendered .el-h1,
+.claudian-inline-diff-preview .markdown-rendered .el-h2,
+.claudian-inline-diff-preview .markdown-rendered .el-h3,
+.claudian-inline-diff-preview .markdown-rendered .el-h4,
+.claudian-inline-diff-preview .markdown-rendered .el-h5,
+.claudian-inline-diff-preview .markdown-rendered .el-h6,
+.claudian-inline-diff-preview .markdown-rendered .el-p,
+.claudian-inline-diff-preview .markdown-rendered .el-ul,
+.claudian-inline-diff-preview .markdown-rendered .el-ol,
+.claudian-inline-diff-preview .markdown-rendered .el-pre,
+.claudian-inline-diff-preview .markdown-rendered .el-table,
+.claudian-inline-diff-preview .markdown-rendered .el-blockquote {
+  margin-block-start: 0;
+  margin-block-end: 6px;
 }
 
 .claudian-inline-markdown-fallback {
@@ -3561,36 +3552,36 @@ code .claudian-file-link:hover {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.claudian-inline-preview-action {
+.claudian-inline-preview-actions button.claudian-inline-preview-action {
   min-height: 28px;
   padding: 4px 10px;
-  border: 1px solid var(--background-modifier-border) !important;
-  border-radius: 6px !important;
-  background: var(--background-secondary) !important;
-  box-shadow: none !important;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  box-shadow: none;
   color: var(--text-normal);
-  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif) !important;
-  font-size: var(--font-ui-small, 13px) !important;
+  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: var(--font-ui-small, 13px);
   line-height: 1.2;
   cursor: pointer;
 }
 
-.claudian-inline-preview-action:hover {
-  background: var(--background-modifier-hover) !important;
+.claudian-inline-preview-actions button.claudian-inline-preview-action:hover {
+  background: var(--background-modifier-hover);
 }
 
-.claudian-inline-preview-action.reject {
+.claudian-inline-preview-actions button.claudian-inline-preview-action.reject {
   color: var(--color-red);
 }
 
-.claudian-inline-preview-action.accept {
-  border-color: var(--interactive-accent) !important;
-  background: var(--interactive-accent) !important;
+.claudian-inline-preview-actions button.claudian-inline-preview-action.accept {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
   color: var(--text-on-accent);
 }
 
-.claudian-inline-preview-action.accept:hover {
-  background: var(--interactive-accent-hover) !important;
+.claudian-inline-preview-actions button.claudian-inline-preview-action.accept:hover {
+  background: var(--interactive-accent-hover);
 }
 
 
@@ -4439,8 +4430,8 @@ code .claudian-file-link:hover {
 /* ── Plan mode input border ──────────────────────── */
 
 .claudian-input-wrapper.claudian-input-plan-mode {
-  border-color: rgb(92, 148, 140) !important;
-  box-shadow: 0 0 0 1px rgb(92, 148, 140);
+  --claudian-input-wrapper-border-color: rgb(92, 148, 140);
+  --claudian-input-wrapper-box-shadow: 0 0 0 1px rgb(92, 148, 140);
 }
 
 
@@ -6385,4 +6376,24 @@ code .claudian-file-link:hover {
   outline: 2px solid var(--interactive-accent);
   outline-offset: -2px;
   border-radius: 4px;
+}
+
+
+/* ============================================
+   base/visibility.css
+   ============================================ */
+/*
+ * Visibility utilities are imported late so they can override component display
+ * defaults without importance flags.
+ */
+.claudian-hidden.claudian-hidden {
+  display: none;
+}
+
+.claudian-visible-block.claudian-visible-block {
+  display: block;
+}
+
+.claudian-visible-flex.claudian-visible-flex {
+  display: flex;
 }

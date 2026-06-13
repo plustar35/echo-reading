@@ -5,6 +5,7 @@
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/plugins/realclaudian/data.json
+.obsidian/plugins/echo-dashboard/data.json
 
 # Python 编译缓存（chapter-split 等 skill 跑过留下的产物）
 __pycache__/
